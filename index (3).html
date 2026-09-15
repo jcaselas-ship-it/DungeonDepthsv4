@@ -1,0 +1,2651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DUNGEON DEPTHS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Variables de tema (sobrescritas por JS) ── */
+  :root {
+    --bg:       #05050d;
+    --bg2:      #0c0c18;
+    --border:   #221a10;
+    --text:     #b8a888;
+    --dim:      #4a3a28;
+    --gold:     #d4a030;
+    --red:      #cc3838;
+    --green:    #38b850;
+  }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Courier New', 'Lucida Console', monospace;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100dvh; overflow: hidden; padding: 4px 6px; gap: 4px;
+    transition: background .3s, color .3s;
+  }
+
+  /* ── Toolbar ── */
+  #toolbar {
+    width: 100%; max-width: 640px;
+    display: flex; justify-content: flex-end; align-items: center;
+    gap: 5px; padding: 2px 0;
+  }
+  .btn-icon {
+    background: #231508;
+    border: 1px solid #c09040;
+    box-shadow: 0 0 0 2px #1a1006, inset 0 0 0 1px #5a3810;
+    color: #d4a030;
+    font-size: 18px; width: 42px; height: 42px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; font-family: inherit;
+    transition: border-color .15s, color .15s, background .15s, box-shadow .15s;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .btn-icon:hover, .btn-icon:active {
+    background: #2e1e08;
+    border-color: #e8c050;
+    box-shadow: 0 0 0 2px #1a1006, inset 0 0 0 1px #8a6020;
+    color: #f0d060;
+  }
+  .btn-icon.active-btn {
+    background: #2a1c08;
+    border-color: #e8c050;
+    box-shadow: 0 0 0 2px #1a1006, inset 0 0 0 1px #8a6020;
+    color: #f0d060;
+  }
+
+  /* ── HUD ── */
+  #hud-top {
+    width: 100%; max-width: 640px;
+    background: var(--bg2); border: 1px solid var(--border);
+    padding: 7px 12px; font-size: 14px; line-height: 1.6;
+    transition: background .3s, border-color .3s;
+  }
+  .hud-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .hud-msg { font-size: 13px; min-height: 18px; margin-top: 2px; color: var(--dim); }
+
+  /* ── Inventario ── */
+  #inv-bar {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-top: none; padding: 4px 8px; min-height: 38px;
+    transition: background .3s, border-color .3s;
+  }
+  #inv-counts {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 12px; flex-shrink: 0; flex-wrap: wrap;
+  }
+  .inv-count {
+    cursor: pointer; padding: 2px 4px; border-radius: 2px;
+    border: 1px solid transparent; transition: border-color .1s;
+    white-space: nowrap;
+  }
+  .inv-count:hover { border-color: var(--gold); }
+  #inv-divider { width: 1px; background: var(--border); align-self: stretch; flex-shrink: 0; }
+  #inv-slots { display: flex; gap: 3px; flex: 1; justify-content: flex-end; flex-wrap: wrap; }
+  .inv-slot {
+    width: 28px; height: 28px; border: 1px solid var(--border);
+    background: var(--bg); display: flex; align-items: center;
+    justify-content: center; font-size: 15px; cursor: pointer;
+    position: relative; border-radius: 2px; flex-shrink: 0;
+    transition: border-color .1s;
+  }
+  .inv-slot:hover { border-color: var(--gold); }
+  .inv-slot.empty { opacity: .25; cursor: default; font-size: 10px; color: var(--dim); }
+  .inv-slot .slot-charges {
+    position: absolute; bottom: 1px; right: 2px;
+    font-size: 8px; color: var(--dim); line-height: 1;
+  }
+
+  /* ── Canvas ── */
+  canvas {
+    display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+    border: 1px solid var(--border); cursor: crosshair; touch-action: none;
+    transition: border-color .3s;
+  }
+
+  /* ── Botón de disparo ── */
+  /* ── Fila de controles táctiles ── */
+  #control-row {
+    display: none;
+    width: 100%; max-width: 640px;
+    flex-direction: row; align-items: center;
+    justify-content: space-between; padding: 6px 0; gap: 8px; min-height: 176px;
+  }
+  /* Mostrar automáticamente en dispositivos táctiles (móvil, tablet, Chromebook táctil) */
+  @media (pointer: coarse) {
+    #control-row { display: flex; }
+  }
+  #control-row.touch-on  { display: flex; }
+  #control-row.touch-off { display: none !important; }
+  #control-row.invert    { flex-direction: row-reverse; }
+
+  #ctrl-left {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+  }
+  #btn-shoot {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; width: 100%; max-width: 150px; min-height: 130px;
+    background: #1a1206; border: 1px solid #c09040;
+    box-shadow: 0 0 0 2px #1a1006, inset 0 0 0 1px #5a3810;
+    color: #d4a030; font-family: inherit; font-size: 22px;
+    cursor: pointer; border-radius: 6px;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    transition: background .1s;
+  }
+  #btn-shoot:active { background: #2e1e08; }
+  #btn-shoot small { font-size: 10px; letter-spacing: 1px; color: var(--text); }
+
+  /* D-pad: cruceta 3×3 */
+  #ctrl-right { flex-shrink: 0; }
+  #dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(3, 52px);
+    gap: 4px;
+  }
+  .btn-dir {
+    background: #1a1206; border: 1px solid #c09040;
+    box-shadow: 0 0 0 2px #1a1006, inset 0 0 0 1px #5a3810;
+    color: #d4a030; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+    transition: background .1s;
+  }
+  .btn-dir:active { background: #2e1e08; }
+
+  @media (max-width: 380px) {
+    #dpad { grid-template-columns: repeat(3,44px); grid-template-rows: repeat(3,44px); }
+    .btn-dir { font-size: 17px; }
+    #btn-shoot { max-width: 120px; min-height: 110px; font-size: 18px; }
+  }
+
+  /* ── Overlay ── */
+  #overlay {
+    position: fixed; inset: 0; background: rgba(5,5,13,.93);
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; z-index: 999; padding: 16px; overflow-y: auto;
+    transition: background .3s;
+  }
+  #overlay.active { display: flex; }
+
+  .screen-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    padding: 24px 28px; text-align: center; max-width: 460px; width: 100%;
+    transition: background .3s, border-color .3s;
+  }
+  .screen-title { font-size: 32px; letter-spacing: 8px; color: var(--gold); margin-bottom: 6px; }
+  .screen-sub   { font-size: 14px; letter-spacing: 4px; color: var(--dim); margin-bottom: 28px; }
+  .stat-line    { font-size: 14px; color: var(--dim); margin: 4px 0; }
+  .stat-val     { color: var(--text); }
+
+  .class-cards  { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .class-card   { border: 1px solid #2a2016; padding: 16px 14px; cursor: pointer; min-width: 128px; text-align: center; background: var(--bg); transition: border-color .15s, background .3s; }
+  .cls-icon  { font-size: 30px; margin-bottom: 10px; }
+  .cls-name  { font-size: 15px; margin-bottom: 6px; letter-spacing: 1px; }
+  .cls-desc  { font-size: 11px; color: var(--dim); margin-bottom: 8px; line-height: 1.6; }
+  .cls-stats { font-size: 12px; color: var(--dim); opacity: .8; }
+
+  .btn-main {
+    background: var(--bg); border: 1px solid var(--dim);
+    color: var(--gold); font-family: inherit; font-size: 14px;
+    padding: 12px 32px; cursor: pointer; letter-spacing: 3px;
+    text-transform: uppercase; margin: 4px; touch-action: manipulation;
+    transition: background .15s, border-color .15s;
+  }
+  .btn-main:hover { border-color: var(--gold); }
+
+  /* Info / leyenda */
+  .info-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    padding: 20px 24px; max-width: 420px; width: 100%;
+    text-align: left; max-height: 82dvh; overflow-y: auto;
+  }
+  .info-title   { font-size: 12px; letter-spacing: 3px; color: var(--gold); margin-bottom: 14px; text-align: center; }
+  .info-section { font-size: 10px; color: var(--dim); letter-spacing: 2px; margin: 12px 0 6px; }
+  .info-grid    { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; font-size: 11px; }
+  .info-row     { display: flex; gap: 8px; align-items: baseline; }
+  .info-sym     { font-size: 14px; width: 20px; text-align: center; }
+  .info-label   { color: var(--text); }
+  .info-sub     { color: var(--dim); font-size: 9px; }
+  .info-ctrl    { font-size: 11px; color: var(--text); margin: 3px 0; }
+  .info-ctrl span { color: var(--gold); }
+  /* ── Responsive móvil ── */
+  @media (max-width: 400px) {
+    body { padding: 2px 3px; gap: 3px; }
+    .btn-icon { width: 36px; height: 36px; font-size: 16px; }
+    #hud-top  { padding: 5px 8px; font-size: 12px; }
+    .hud-msg  { font-size: 11px; }
+    .screen-box { padding: 18px 16px; }
+    .screen-title { font-size: 26px; }
+    .screen-sub   { font-size: 12px; }
+    .cls-icon  { font-size: 24px; }
+    .cls-name  { font-size: 13px; }
+    .btn-main  { font-size: 12px; padding: 10px 20px; }
+  }
+  @media (min-width: 600px) and (max-width: 1024px) {
+    /* Tablet: tamaños intermedios, ya manejados por computeLayout */
+    body { padding: 6px 8px; gap: 6px; }
+  }
+  /* ── Level up ── */
+  .lvl-cards { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:8px; }
+  .lvl-card {
+    border:1px solid var(--border); padding:16px 12px; cursor:pointer;
+    min-width:100px; max-width:130px; text-align:center; background:var(--bg);
+    transition:border-color .15s, background .15s; flex:1;
+  }
+  .lvl-card:hover { border-color:var(--gold); background:var(--bg2); }
+  .lvl-icon  { font-size:20px; margin-bottom:8px; color:var(--gold); }
+  .lvl-label { font-size:11px; color:var(--text); line-height:1.5; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button class="btn-icon" id="btn-theme" title="Modo claro/oscuro">☀</button>
+  <button class="btn-icon" id="btn-audio" title="Efectos de sonido">♩</button>
+  <button class="btn-icon" id="btn-dpad"    title="Mostrar cruceta">✛</button>
+  <button class="btn-icon" id="btn-hand"    title="Invertir controles (zurdos)">⇄</button>
+  <button class="btn-icon" id="btn-pause"   title="Pausa (Esc)">⏸</button>
+  <button class="btn-icon" id="btn-restart" title="Reiniciar">↺</button>
+  <button class="btn-icon" id="btn-info"    title="Iconos y controles">ℹ</button>
+</div>
+
+<div id="hud-top">
+  <div class="hud-row">
+    <div id="hud-lives"></div>
+    <div id="hud-hp"></div>
+    <div id="hud-info" style="font-size:13px;color:var(--dim)">—</div>
+  </div>
+  <div class="hud-row" style="margin-top:2px">
+    <div id="hud-gold"  style="color:var(--gold);font-size:14px">◆ 0</div>
+    <div id="hud-xp"    style="font-size:13px;color:var(--dim)"></div>
+  </div>
+  <div class="hud-msg" id="hud-msg"></div>
+</div>
+
+<!-- Barra de inventario -->
+<div id="inv-bar">
+  <div id="inv-counts"></div>
+  <div id="inv-divider"></div>
+  <div id="inv-slots"></div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="control-row">
+  <div id="ctrl-left">
+    <button id="btn-shoot" title="Disparar (Espacio)">◎<br><small>DISPARAR</small></button>
+  </div>
+  <div id="ctrl-right">
+    <div id="dpad">
+      <div></div>
+      <button class="btn-dir" id="btn-up">▲</button>
+      <div></div>
+      <button class="btn-dir" id="btn-left">◀</button>
+      <div></div>
+      <button class="btn-dir" id="btn-right">▶</button>
+      <div></div>
+      <button class="btn-dir" id="btn-down">▼</button>
+      <div></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay"><div id="overlay-content"></div></div>
+
+<script>
+'use strict';
+
+// ================================================================
+// MÓDULO 1: CONFIGURACIÓN
+// ================================================================
+const CFG = {
+  GW:20, GH:20, VIEW:15,
+  VISION_BASE:4, TORCH_BONUS:2,
+  ENEMY_MS:700, MAX_LIVES:3, MAX_HP:10,
+  PROJ_RANGE:14, PROJ_MS:380,
+
+  T:{ WALL:0,FLOOR:1,EXIT:2,EXIT_SECRET:3,DOOR_R:4,DOOR_B:5,DOOR_G:6,TRAP:7,DOOR_GOLD:8,DOOR_GATE:9 },
+
+  // Cada tema tiene colores para modo oscuro (d) y claro (l), y modificadores de gameplay
+  THEMES:[
+    { name:'Cripta',
+      dFloor:'#12091e', dWall:'#1e1030', lFloor:'#d0c4e0', lWall:'#806890',
+      mod:{ enemyBias:['ske','gho','gho','wit','ske'], trapMult:1.0, visionMod:-1,
+            urnBonus:2, foodMult:0.4, potionBonus:1, doorMult:1.0,
+            hasTombs:true, decorSym:null } },
+    { name:'Cueva',
+      dFloor:'#0d1608', dWall:'#162210', lFloor:'#c4d4b4', lWall:'#607850',
+      mod:{ enemyBias:['rat','bat','rat','bat','bat'], trapMult:2.0, visionMod:0,
+            torchBonus:2, foodMult:0.4, doorMult:0.3,
+            decorSym:null } },
+    { name:'Fortaleza',
+      dFloor:'#180e06', dWall:'#261608', lFloor:'#dcd0b0', lWall:'#9a7858',
+      mod:{ enemyBias:['ske','bos','wit','ske'], trapMult:0.5, visionMod:0,
+            goldMult:2.0, keyBonus:1, doorMult:2.0,
+            hasGates:true, decorSym:null } },
+    { name:'Bosque Subterráneo',
+      dFloor:'#081408', dWall:'#0e2008', lFloor:'#c8d8a8', lWall:'#608040',
+      mod:{ enemyBias:['bat','wit','bat','gho'], trapMult:0.7, visionMod:-1,
+            potionBonus:2, foodBonus:2, noUrns:true, doorMult:0.2,
+            hasTrees:true, decorSym:null } },
+  ],
+
+  CLASSES:[
+    { id:'w', name:'Guerrero', desc:'Resistente · Frenesí a baja vida',    icon:'⚔', sym:'@', hp:10, mana:0,  atk:3, def:2, col:'#d06050', visionBonus:0 },
+    { id:'a', name:'Arquero',  desc:'Ágil · Sin réplica · Disparo largo',  icon:'◎', sym:"}", hp:7,  mana:4,  atk:2, def:1, col:'#50c070', visionBonus:0 },
+    { id:'m', name:'Mago',     desc:'Poderoso · Disparo usa maná · Aliado', icon:'✦', sym:'&', hp:7,  mana:10, atk:4, def:0, col:'#5080d0', visionBonus:1 },
+  ],
+
+  ENEMY_DEFS:[
+    { id:'rat', name:'Rata',       sym:'r', tier:1, hp:2,  maxHp:2,  atk:1, xp:5,  detect:5,  col:'#a05828' },
+    { id:'bat', name:'Murciélago', sym:'⋎', tier:1, hp:2,  maxHp:2,  atk:1, xp:5,  detect:7,  col:'#8060a0' },
+    { id:'ske', name:'Esqueleto',  sym:'╬', tier:2, hp:5,  maxHp:5,  atk:2, xp:15, detect:6,  col:'#b0a060' },
+    { id:'gho', name:'Fantasma',   sym:'ƍ', tier:2, hp:4,  maxHp:4,  atk:2, xp:15, detect:8,  col:'#6090b8' },
+    { id:'wit', name:'Bruja',      sym:'Ψ', tier:3, hp:8,  maxHp:8,  atk:3, xp:30, detect:7,  col:'#a030c0' },
+    { id:'bos', name:'Mini-Jefe',  sym:'Ω', tier:3, hp:15, maxHp:15, atk:4, xp:50, detect:10, col:'#e02020' },
+    { id:'nec', name:'Nigromante', sym:'☠', tier:4, hp:22, maxHp:22, atk:5, xp:80, detect:9,  col:'#7020a0' },
+  ],
+
+  ITEM_COL:{ gold:'#e8b828', potion:'#d83050', torch:'#e07828', key_red:'#d83838', key_blue:'#3850d8', key_green:'#38b850', food:'#70b838', mana_pot:'#5070e8', chest:'#b07828', altar:'#8850d0', urn:'#708090', arrows:'#c0c070', med_luz:'#f0e060', med_inmun:'#60c0f0', med_invis:'#b0b0b0', med_secret:'#e080e0', merchant:'#40d0d0', familiar_item:'#1a4020', tree:'#50a030', tomb:'#9060b0' },
+  ITEM_SYM:{ gold:'◆', potion:'♥', torch:'ı', key_red:'⚷', key_blue:'⚷', key_green:'⚷', food:'%', mana_pot:'✦', chest:'⊞', altar:'Δ', urn:'⚱', arrows:'↑', med_luz:'◉', med_inmun:'⊙', med_invis:'◌', med_secret:'✵', merchant:'$', familiar_item:'ω', tree:'♣', tomb:'✟' },
+
+  // Objetos que van al inventario de slots (llaves + medallones)
+  SLOT_ITEMS: new Set(['key_red','key_blue','key_green','med_luz','med_inmun','med_invis','med_secret']),
+
+  // Medallones — duración en niveles completos
+  MEDALLIONS:[
+    { type:'med_luz',    sym:'◉', col:'#f0e060', name:'Medallón de Luz',       levels:1 },
+    { type:'med_inmun',  sym:'⊙', col:'#60c0f0', name:'Medallón de Inmunidad', levels:1 },
+    { type:'med_invis',  sym:'◌', col:'#b0b0b0', name:'Medallón de Invis.',    levels:3 },
+    { type:'med_secret', sym:'✵', col:'#e080e0', name:'Medallón de Secretos',  levels:5 },
+  ],
+
+  MAX_SLOTS: 8,
+};
+
+// ================================================================
+// MÓDULO 2: SISTEMA DE TEMAS (claro / oscuro)
+// ================================================================
+
+let currentTheme = 'dark';
+
+const THEME_VARS = {
+  dark: {
+    '--bg':'#05050d', '--bg2':'#0c0c18', '--border':'#4a3820',
+    '--text':'#b8a888', '--dim':'#4a3a28', '--gold':'#d4a030',
+    '--red':'#cc3838', '--green':'#38b850',
+  },
+  light: {
+    '--bg':'#ece6d4', '--bg2':'#e0d8c0', '--border':'#b09068',
+    '--text':'#3a2a18', '--dim':'#8a7050', '--gold':'#7a5808',
+    '--red':'#a01818', '--green':'#1a7830',
+  },
+};
+
+// Color de fondo del canvas por tema
+const CANVAS_BG = { dark:'#000000', light:'#d0c4a4' };
+// Alpha para tiles no explorados en modo claro
+const FOG0_ALPHA = { dark:0, light:0.1 };
+// Alpha para tiles explorados pero no visibles
+const FOG1_ALPHA = { dark:0.32, light:0.42 };
+
+function applyTheme(name) {
+  currentTheme = name;
+  const vars = THEME_VARS[name];
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(vars)) root.setProperty(k, v);
+  // Fondo del overlay
+  document.getElementById('overlay').style.background =
+    name === 'dark' ? 'rgba(5,5,13,.93)' : 'rgba(220,210,185,.93)';
+  document.getElementById('btn-theme').textContent = name === 'dark' ? '☀' : '☾';
+  document.getElementById('btn-theme').classList.toggle('active-btn', name === 'light');
+  if (G.dungeon) render();
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+// ================================================================
+// MÓDULO 3: SISTEMA DE AUDIO — solo efectos de sonido
+// ================================================================
+
+let audioCtx = null;
+let audioOn  = false;
+
+function toggleAudio() {
+  audioOn = !audioOn;
+  const btn = document.getElementById('btn-audio');
+  btn.textContent = audioOn ? '♪' : '♩';
+  btn.classList.toggle('active-btn', audioOn);
+  // Inicializar contexto en el primer clic (requiere gesto del usuario)
+  if (audioOn && !audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioOn && audioCtx?.state === 'suspended') audioCtx.resume();
+}
+
+// ── Primitivas ──
+
+function sfxBurst(freq, gain, dur, type = 'sine') {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g   = audioCtx.createGain();
+  osc.type = type; osc.frequency.value = freq;
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.01);
+}
+
+function sfxSweep(f0, f1, gain, dur, type = 'sine') {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g   = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(f0, t);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.01);
+}
+
+function sfxNoise(gain, dur) {
+  if (!audioCtx) return;
+  const t   = audioCtx.currentTime;
+  const len = Math.floor(audioCtx.sampleRate * dur);
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src  = audioCtx.createBufferSource();
+  const filt = audioCtx.createBiquadFilter();
+  const g    = audioCtx.createGain();
+  filt.type = 'lowpass'; filt.frequency.value = 400;
+  src.buffer = buf;
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(filt); filt.connect(g); g.connect(audioCtx.destination);
+  src.start(t); src.stop(t + dur + 0.01);
+}
+
+// ── Efectos de sonido del juego ──
+function sfx(type) {
+  if (!audioOn || !audioCtx) return;
+  if (audioCtx.state === 'suspended') { audioCtx.resume(); return; }
+  switch (type) {
+    // Movimiento: golpe suave de paso
+    case 'step':       sfxBurst(200, 0.04, 0.07, 'triangle'); break;
+    // Ataque del jugador: impacto grave descendente
+    case 'attack':     sfxSweep(220, 80,  0.18, 0.12, 'sawtooth'); break;
+    // Golpe recibido: cuadrada grave
+    case 'player_hit': sfxSweep(130, 55,  0.28, 0.18, 'square'); break;
+    // Muerte de enemigo: barrido descendente
+    case 'death':      sfxSweep(380, 65,  0.22, 0.45, 'sawtooth'); break;
+    // Oro: dos notas ascendentes
+    case 'gold':
+      sfxBurst(880, 0.06, 0.12);
+      setTimeout(() => sfxBurst(1100, 0.05, 0.14), 90);
+      break;
+    // Poción: acorde ascendente
+    case 'potion':
+      sfxBurst(660, 0.06, 0.12);
+      setTimeout(() => sfxBurst(880,  0.05, 0.14), 85);
+      setTimeout(() => sfxBurst(1100, 0.04, 0.16), 170);
+      break;
+    // Llave: doble clink
+    case 'key':
+      sfxBurst(600, 0.09, 0.1, 'triangle');
+      setTimeout(() => sfxBurst(720, 0.07, 0.12, 'triangle'), 100);
+      break;
+    // Puerta: crujido grave
+    case 'door':       sfxSweep(120, 80, 0.25, 0.3, 'square'); break;
+    // Trampa: ruido corto
+    case 'trap':       sfxNoise(0.32, 0.22); break;
+    // Flecha: silbido descendente
+    case 'shoot_a':    sfxSweep(700, 180, 0.1, 0.18, 'triangle'); break;
+    // Hechizo: tono ascendente mágico
+    case 'shoot_m':    sfxSweep(350, 900, 0.12, 0.22, 'sine'); break;
+    // Subida de nivel: fanfarria de 4 notas
+    case 'levelup':
+      [440, 550, 660, 880].forEach((f, i) =>
+        setTimeout(() => sfxBurst(f, 0.07, 0.28), i * 100));
+      break;
+    // Objeto genérico
+    case 'pickup':     sfxBurst(700, 0.07, 0.1); break;
+    // Abrir cofre: 3 notas
+    case 'chest':
+      sfxBurst(550, 0.07, 0.12);
+      setTimeout(() => sfxBurst(770, 0.06, 0.14), 100);
+      setTimeout(() => sfxBurst(990, 0.05, 0.18), 200);
+      break;
+    // Salida de mazmorra: fanfarria ascendente
+    case 'escape':
+      [440, 550, 660, 880, 1100].forEach((f, i) =>
+        setTimeout(() => sfxBurst(f, 0.06, 0.22), i * 90));
+      break;
+    // Antorcha: chispa
+    case 'torch':      sfxNoise(0.12, 0.1); sfxBurst(300, 0.08, 0.15, 'triangle'); break;
+    // Altar: acorde ascendente con sweeps suaves
+    case 'altar':
+      sfxSweep(220, 220, 0.05, 0.7);
+      setTimeout(() => sfxSweep(277, 277, 0.04, 0.6), 120);
+      setTimeout(() => sfxSweep(330, 330, 0.04, 0.55), 240);
+      break;
+    // Derrota (perder una vida): barrido largo descendente + ruido
+    case 'defeat':
+      sfxSweep(440, 60, 0.25, 0.9, 'sawtooth');
+      setTimeout(() => sfxNoise(0.15, 0.4), 200);
+      break;
+    // Game Over: tres notas descendentes lentas
+    case 'gameover':
+      sfxBurst(330, 0.12, 0.5, 'sawtooth');
+      setTimeout(() => sfxBurst(247, 0.12, 0.5, 'sawtooth'), 500);
+      setTimeout(() => sfxBurst(165, 0.14, 0.9, 'sawtooth'), 1000);
+      setTimeout(() => sfxNoise(0.08, 0.6), 1200);
+      break;
+  }
+}
+
+// ================================================================
+// MÓDULO 4: ESTADO
+// ================================================================
+let G = {};
+
+function initState(clsId) {
+  const cls = CFG.CLASSES.find(c => c.id === clsId);
+  G = {
+    screen:'playing', paused:false,
+    depth:1, lives:CFG.MAX_LIVES,
+    xp:0, xpNext:50, playerLevel:1,
+    totalGold:0, totalKills:0,
+    player:{
+      cls:clsId, name:cls.name, icon:cls.icon, sym:cls.sym, col:cls.col,
+      x:1, y:1, hp:cls.hp, maxHp:cls.hp,
+      mana:cls.mana, maxMana:cls.mana,
+      atk:cls.atk, def:cls.def,
+      gold:0,
+      // Contadores de consumibles
+      potions:0, food:0, mana_pots:0,
+      torches:1,
+      arrows: clsId==='a' ? 12 : 0,
+      // Slots de equipables (llaves, medallones) — máx 8
+      slots:[],
+      facing:{ dx:1, dy:0 },
+      berserk:false, altarBuff:false,
+      // Efectos activos de medallones (en niveles restantes)
+      ghostImmune:0,   // niveles de inmunidad a fantasmas
+      invisible:0,     // niveles de invisibilidad
+      secretsMap:0,    // niveles de visión de secretos
+      lightFog:false,  // niebla eliminada este nivel
+    },
+    dungeon:null, fog:null,
+    enemies:[], items:[], messages:[],
+    camX:0, camY:0,
+    lastDmgFlash:0,
+    projectile:null,
+    familiar:null,        // aliado persistente entre mazmorras
+    familiarRespawnCooldown:0, // turnos hasta que el espíritu del mago regrese tras morir a mitad de piso
+    pendingLevelUps:0,    // elecciones de nivel pendientes (se muestran al salir)
+    spawning:[],          // entidades en proceso de materializarse (tumbas cripta)
+  };
+}
+
+// ================================================================
+// MÓDULO 5: GENERADOR DE MAZMORRAS
+// ================================================================
+
+function generateDungeon(depth) {
+  const T = CFG.T;
+  const theme = CFG.THEMES[(depth - 1) % CFG.THEMES.length];
+  const grid  = Array.from({ length:CFG.GH }, () => new Array(CFG.GW).fill(T.WALL));
+  const rooms = [];
+
+  const main = clampRoom({ x:3+ri(5), y:3+ri(4), w:5+ri(4), h:4+ri(3) });
+  carveRoom(grid, main); rooms.push(main);
+
+  let att = 0;
+  while (rooms.length <= 1 + ri(3) && att < 30) {
+    att++;
+    const r = clampRoom({ x:1+ri(14), y:1+ri(12), w:3+ri(5), h:3+ri(4) });
+    if (overlapsAny(r, rooms)) continue;
+    carveRoom(grid, r);
+    carveCorridor(grid, centerOf(rooms[rooms.length - 1]), centerOf(r));
+    rooms.push(r);
+  }
+
+  const startX = main.x + 1, startY = main.y + 1;
+
+  const exit1 = findFloorFar(grid, startX, startY, 12, null);
+  if (exit1) grid[exit1.y][exit1.x] = T.EXIT;
+
+  const exit2 = findFloorFar(grid, startX, startY, 8, exit1);
+  if (exit2) grid[exit2.y][exit2.x] = T.EXIT;   // ambas salidas siempre visibles
+
+  // Salida secreta: invisible como el suelo y solo utilizable con el Medallón de Secretos activo
+  // (exit1/exit2 ya no son T.FLOOR, así que findFloorFar los evita de forma natural)
+  const secretExit = findFloorFar(grid, startX, startY, 6, null);
+  if (secretExit) grid[secretExit.y][secretExit.x] = T.EXIT_SECRET;
+
+  // Puertas en umbrales lógicos + posible puerta dorada
+  if (rooms.length > 1 && Math.random() < 0.75) {
+    placeDoors(grid, rooms, startX, startY, depth, theme.mod?.doorMult||1, theme.mod?.hasGates||false);
+  }
+
+  return { grid, rooms, theme, startX, startY };
+}
+
+function carveRoom(grid, r) {
+  for (let y=r.y; y<r.y+r.h; y++)
+    for (let x=r.x; x<r.x+r.w; x++)
+      if (inBounds(x,y)) grid[y][x] = CFG.T.FLOOR;
+}
+function carveCorridor(grid, a, b) {
+  let x=a.x, y=a.y;
+  const sx=Math.sign(b.x-x), sy=Math.sign(b.y-y);
+  while (x!==b.x) { if(inBounds(x,y)) grid[y][x]=CFG.T.FLOOR; x+=sx; }
+  while (y!==b.y) { if(inBounds(x,y)) grid[y][x]=CFG.T.FLOOR; y+=sy; }
+  if (inBounds(x,y)) grid[y][x]=CFG.T.FLOOR;
+}
+function clampRoom(r) {
+  r.w=Math.max(3, Math.min(r.w, CFG.GW-r.x-1));
+  r.h=Math.max(3, Math.min(r.h, CFG.GH-r.y-1));
+  return r;
+}
+function overlapsAny(r, rooms) {
+  return rooms.some(o => r.x<o.x+o.w+1 && r.x+r.w+1>o.x && r.y<o.y+o.h+1 && r.y+r.h+1>o.y);
+}
+function centerOf(r) { return { x:r.x+(r.w>>1), y:r.y+(r.h>>1) }; }
+
+// ── Helpers para puertas lógicas y BFS ──
+
+// ¿Está (x,y) dentro de alguna habitación?
+function isInRoom(x, y, rooms) {
+  return rooms.some(r => x>=r.x && x<r.x+r.w && y>=r.y && y<r.y+r.h);
+}
+
+// Tiles umbral: borde de habitación con al menos un vecino de corredor
+function findThresholds(grid, rooms) {
+  const thresholds = [];
+  for (let y=1; y<CFG.GH-1; y++) {
+    for (let x=1; x<CFG.GW-1; x++) {
+      if (grid[y][x] !== CFG.T.FLOOR) continue;
+      if (!isInRoom(x, y, rooms)) continue;
+      const hasCorridor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => {
+        const nx=x+dx, ny=y+dy;
+        return inBounds(nx,ny) && grid[ny][nx]===CFG.T.FLOOR && !isInRoom(nx,ny,rooms);
+      });
+      if (hasCorridor) thresholds.push({x, y});
+    }
+  }
+  return thresholds;
+}
+
+// BFS flood: devuelve Set de claves "x,y" alcanzables desde (sx,sy)
+// blockedSet contiene claves "x,y" de tiles bloqueados (p.ej. la puerta)
+function bfsFlood(grid, sx, sy, blockedSet = new Set()) {
+  const T = CFG.T;
+  const visited = new Set();
+  const queue = [{x:sx, y:sy}];
+  while (queue.length) {
+    const {x, y} = queue.shift();
+    const k = `${x},${y}`;
+    if (visited.has(k)) continue;
+    visited.add(k);
+    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx=x+dx, ny=y+dy;
+      if (!inBounds(nx,ny)) continue;
+      const nk = `${nx},${ny}`;
+      if (visited.has(nk) || blockedSet.has(nk)) continue;
+      const t = grid[ny][nx];
+      // Pasable: suelo, salidas, trampas — NO paredes ni puertas
+      if (t===T.FLOOR||t===T.EXIT||t===T.EXIT_SECRET||t===T.TRAP)
+        queue.push({x:nx, y:ny});
+    }
+  }
+  return visited;
+}
+
+// Coloca puertas en umbrales lógicos de habitación
+function placeDoors(grid, rooms, startX, startY, depth=1, doorMult=1, hasGates=false) {
+  const T = CFG.T;
+  const thresholds = findThresholds(grid, rooms);
+  if (!thresholds.length) return;
+
+  shuffle(thresholds);
+  const doorTypes = [T.DOOR_R, T.DOOR_B, T.DOOR_G];
+  let placed = 0;
+  const maxDoors = Math.max(0, Math.round((rooms.length >= 3 ? 1+ri(2) : ri(2)) * doorMult));
+
+  for (const t of thresholds) {
+    if (placed >= maxDoors) break;
+    if (Math.abs(t.x-startX) + Math.abs(t.y-startY) < 5) continue;
+    const nearExit = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => {
+      const nx=t.x+dx, ny=t.y+dy;
+      return inBounds(nx,ny) && (grid[ny][nx]===T.EXIT);
+    });
+    if (nearExit) continue;
+    grid[t.y][t.x] = doorTypes[placed];
+    placed++;
+  }
+
+  // Rejas en Fortaleza: primera puerta disponible es DOOR_GATE
+  if (hasGates) {
+    const gateThresholds=thresholds.filter(t=>{
+      const dist=Math.abs(t.x-startX)+Math.abs(t.y-startY);
+      return dist>=5&&grid[t.y][t.x]===T.FLOOR;
+    });
+    if (gateThresholds.length) {
+      const gt=gateThresholds[ri(gateThresholds.length)];
+      grid[gt.y][gt.x]=T.DOOR_GATE;
+    }
+  }
+
+  // Puerta dorada: ~25% de probabilidad a partir del piso 4
+  if (depth >= 4 && Math.random() < 0.28 && rooms.length >= 2) {
+    // Buscar un umbral en una sala extra (no la sala principal = rooms[0])
+    const extraThresholds = thresholds.filter(t => {
+      const dist = Math.abs(t.x-startX)+Math.abs(t.y-startY);
+      return dist >= 6 && grid[t.y][t.x]===T.FLOOR; // libre (no ocupada ya por otra puerta)
+    });
+    if (extraThresholds.length) {
+      const t = extraThresholds[ri(extraThresholds.length)];
+      grid[t.y][t.x] = T.DOOR_GOLD;
+    }
+  }
+}
+function findFloorFar(grid, sx, sy, minD, excl) {
+  const c=[];
+  for (let y=1;y<CFG.GH-1;y++)
+    for (let x=1;x<CFG.GW-1;x++) {
+      if (grid[y][x]!==CFG.T.FLOOR) continue;
+      if (excl&&excl.x===x&&excl.y===y) continue;
+      const d=Math.abs(x-sx)+Math.abs(y-sy);
+      if (d>=minD) c.push({x,y,d});
+    }
+  if (!c.length) return null;
+  c.sort((a,b)=>b.d-a.d);
+  return c[ri(Math.min(6,c.length))];
+}
+
+// ================================================================
+// MÓDULO 6: COLOCACIÓN DE ENTIDADES
+// ================================================================
+
+function placeEntities(depth) {
+  G.enemies=[]; G.items=[];
+  const T=CFG.T, grid=G.dungeon.grid;
+  const mod=G.dungeon.theme.mod||{};
+
+  // Escalado de tier más gradual: tier 1 solo, tier 2 desde piso 4, tier 3 desde piso 8, tier 4 desde piso 12
+  const maxTier = depth<=3 ? 1 : depth<=7 ? 2 : depth<=11 ? 3 : 4;
+
+  // Pool base filtrado por tier
+  const baseEn=CFG.ENEMY_DEFS.filter(e=>e.tier<=maxTier);
+
+  // Limitar a 3 tipos de enemigo por mazmorra (coherencia temática)
+  const shuffledBase=[...baseEn]; shuffle(shuffledBase);
+  const allowedTypes=new Set(shuffledBase.slice(0,3).map(e=>e.id));
+  let enemyPool=baseEn.filter(e=>allowedTypes.has(e.id));
+  // Bias del tema: añadir copias extra de los enemigos preferidos
+  if (mod.enemyBias) for (const id of mod.enemyBias){
+    const e=CFG.ENEMY_DEFS.find(e=>e.id===id&&e.tier<=maxTier);
+    if(e&&allowedTypes.has(e.id)) enemyPool.push(e);
+  }
+  if (!enemyPool.length) enemyPool=[...baseEn]; // fallback
+
+  // Zona segura: radio 6 (antes era 4), más grande para dar espacio al jugador
+  const safeRadius = depth===1 ? 8 : 6;
+  const safe=p=>Math.abs(p.x-G.dungeon.startX)+Math.abs(p.y-G.dungeon.startY)<safeRadius;
+  let floors=getFloorTiles(); shuffle(floors);
+  let far=floors.filter(p=>!safe(p)), near=floors.filter(p=>safe(p));
+  const numTraps=Math.round((3+ri(3))*(mod.trapMult||1));
+  for (let i=0;i<numTraps&&far.length;i++){const p=far.pop();grid[p.y][p.x]=T.TRAP;}
+  floors=getFloorTiles(); shuffle(floors);
+  far=floors.filter(p=>!safe(p));
+  const numEnemies = depth===1 ? 2+ri(2) : 4+depth+ri(3); // piso 1: pocos enemigos
+  for (let i=0;i<numEnemies&&far.length;i++){
+    const p=far.pop(),def=enemyPool[ri(enemyPool.length)],b=Math.floor(depth/2);
+    G.enemies.push({...def,x:p.x,y:p.y,hp:def.hp+b,maxHp:def.maxHp+b,atk:def.atk+Math.floor(depth/3),alert:false});
+  }
+  let pool=['gold','gold','gold','potion','torch','food','gold','potion','arrows'];
+  for (let i=0;i<(mod.torchBonus||0);i++) pool.push('torch');
+  for (let i=0;i<(mod.potionBonus||0);i++) pool.push('potion');
+  for (let i=0;i<(mod.foodBonus||0);i++) pool.push('food');
+  if (mod.foodMult&&mod.foodMult<1) pool=pool.filter(t=>t!=='food'||Math.random()<mod.foodMult);
+  if (mod.goldMult&&mod.goldMult>1) for (let i=0;i<Math.floor(mod.goldMult);i++) pool.push('gold');
+  for (let i=0;i<5+ri(4)&&far.length;i++){
+    const p=far.pop(),type=pool[ri(pool.length)];
+    const amt=type==='gold'?Math.round((5+ri(10*depth))*(mod.goldMult||1)):type==='arrows'?3+ri(5):1;
+    G.items.push({type,x:p.x,y:p.y,amount:amt});
+  }
+  if (far.length){const p=far.pop();G.items.push({type:'chest',x:p.x,y:p.y,opened:false});}
+  if (!mod.noUrns&&far.length&&depth>=2){const p=far.pop();G.items.push({type:'urn',x:p.x,y:p.y,opened:false});}
+  for (let i=0;i<(mod.urnBonus||0)&&far.length;i++){const p=far.pop();G.items.push({type:'urn',x:p.x,y:p.y,opened:false});}
+  if (far.length&&G.dungeon.rooms.length>1){const p=far.pop();G.items.push({type:'altar',x:p.x,y:p.y});}
+  if (mod.keyBonus&&far.length){const p=far.pop();G.items.push({type:['key_red','key_blue','key_green'][ri(3)],x:p.x,y:p.y});}
+  if (far.length&&depth>=2&&Math.random()<0.6){const med=CFG.MEDALLIONS[ri(CFG.MEDALLIONS.length)];const p=far.pop();G.items.push({type:med.type,x:p.x,y:p.y});}
+  if (G.player.cls==='m') for (let i=0;i<1+ri(2)&&far.length;i++){const p=far.pop();G.items.push({type:'mana_pot',x:p.x,y:p.y,amount:3});}
+  if (!G.familiar&&depth>=3&&Math.random()<0.15&&far.length){const p=far.pop();G.items.push({type:'familiar_item',x:p.x,y:p.y});}
+  // Sala del tesoro detrás de puerta dorada
+  for (let gy=0;gy<CFG.GH;gy++) for (let gx2=0;gx2<CFG.GW;gx2++){
+    if (grid[gy][gx2]!==T.DOOR_GOLD) continue;
+    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=gx2+dx,ny=gy+dy;
+      if (!inBounds(nx,ny)||grid[ny][nx]!==T.FLOOR) continue;
+      const room=G.dungeon.rooms.find(r=>nx>=r.x&&nx<r.x+r.w&&ny>=r.y&&ny<r.y+r.h);
+      if (!room) continue;
+      if (G.dungeon.startX>=room.x&&G.dungeon.startX<room.x+room.w&&G.dungeon.startY>=room.y&&G.dungeon.startY<room.y+room.h) continue;
+      const cx3=room.x+(room.w>>1),cy3=room.y+(room.h>>1);
+      G.items.push({type:'chest',x:cx3,y:cy3,opened:false});
+      if (cx3+1<room.x+room.w) G.items.push({type:'potion',x:cx3+1,y:cy3,amount:1});
+      const med2=CFG.MEDALLIONS[ri(CFG.MEDALLIONS.length)];
+      if (cx3-1>=room.x) G.items.push({type:med2.type,x:cx3-1,y:cy3});
+      break;
+    }
+    break;
+  }
+  // Decoraciones ambientales
+  if (mod.decorSym){
+    const dp=getFloorTiles().filter(t=>!G.items.some(i=>i.x===t.x&&i.y===t.y));
+    shuffle(dp);
+    for (let i=0;i<3+ri(3)&&i<dp.length;i++){
+      const sym=mod.decorSym2&&Math.random()<0.4?mod.decorSym2:mod.decorSym;
+      G.items.push({type:'decor',sym,col:mod.decorCol||'#1a1a20',x:dp[i].x,y:dp[i].y});
+    }
+  }
+  // Llaves con BFS garantizado
+  const doorKeyMap={[T.DOOR_R]:'key_red',[T.DOOR_B]:'key_blue',[T.DOOR_G]:'key_green'};
+  for (let dy=0;dy<CFG.GH;dy++) for (let dx=0;dx<CFG.GW;dx++){
+    const keyType=doorKeyMap[grid[dy][dx]];if(!keyType)continue;
+    const blocked=new Set([`${dx},${dy}`]);
+    const reachable=bfsFlood(grid,G.dungeon.startX,G.dungeon.startY,blocked);
+    const candidates=[];
+    for (const k of reachable){
+      const [kx,ky]=k.split(',').map(Number);
+      if (grid[ky][kx]!==T.FLOOR) continue;
+      if (G.items.some(i=>i.x===kx&&i.y===ky)) continue;
+      if (Math.abs(kx-G.dungeon.startX)+Math.abs(ky-G.dungeon.startY)<3) continue;
+      candidates.push({x:kx,y:ky});
+    }
+    if (candidates.length){shuffle(candidates);G.items.push({type:keyType,x:candidates[0].x,y:candidates[0].y});}
+  }
+}
+
+
+function getFloorTiles() {
+  const t=[];
+  for (let y=0;y<CFG.GH;y++)
+    for (let x=0;x<CFG.GW;x++)
+      if (G.dungeon.grid[y][x]===CFG.T.FLOOR) t.push({x,y});
+  return t;
+}
+
+// ── Mazmorra especial: TIENDA (cada 5 pisos) ──
+function generateShopDungeon(depth) {
+  const T = CFG.T;
+  const theme = { name:'Tienda', dFloor:'#0a1020', dWall:'#101828', lFloor:'#d8d0c0', lWall:'#908070' };
+  const grid = Array.from({length:CFG.GH}, () => new Array(CFG.GW).fill(T.WALL));
+
+  // Sala de entrada (jugador empieza aquí)
+  const entry = { x:2, y:7, w:6, h:6 };
+  // Sala de tienda (más grande, NPC y productos)
+  const shop  = { x:12, y:5, w:7, h:9 };
+  carveRoom(grid, entry); carveRoom(grid, shop);
+  carveCorridor(grid, centerOf(entry), centerOf(shop));
+
+  // Salida visible en la sala de entrada
+  grid[entry.y+1][entry.x+1] = T.EXIT;
+
+  const startX = entry.x+2, startY = entry.y+3;
+  return { grid, rooms:[entry, shop], theme, startX, startY, isShop:true, shopRoom:shop };
+}
+
+function placeShopItems(depth) {
+  const shop = G.dungeon.shopRoom;
+  const cx = shop.x + (shop.w>>1);
+  const cy = shop.y + (shop.h>>1);
+
+  // NPC mercader en el centro
+  G.items.push({type:'merchant', x:cx, y:cy});
+
+  // Surtido de productos con precios dinámicos
+  const catalog = [
+    {item:'potion',    sym:'♥', name:'Poción',       price: 10+depth*2 },
+    {item:'mana_pot',  sym:'✦', name:'Poción Maná',  price: 15+depth*2 },
+    {item:'food',      sym:'%', name:'Comida',        price:  5+depth   },
+    {item:'arrows',    sym:'↑', name:'Flechas ×5',   price:  8+depth   },
+    {item:'torch',     sym:'ı', name:'Antorcha',      price:  6+depth   },
+    {item:'key_red',   sym:'⚷', name:'Llave Roja',   price: 20+depth*3 },
+    {item:'key_blue',  sym:'⚷', name:'Llave Azul',   price: 20+depth*3 },
+    {item:'key_green', sym:'⚷', name:'Llave Verde',  price: 20+depth*3 },
+    {item:'med_luz',   sym:'◉', name:'Medall. Luz',  price: 40+depth*4 },
+    {item:'med_inmun', sym:'⊙', name:'Medall. Inmun.',price: 35+depth*4 },
+    {item:'med_invis', sym:'◌', name:'Medall. Invis.',price: 45+depth*4 },
+    {item:'med_secret',sym:'✵', name:'Medall. Sec.', price: 50+depth*4 },
+  ];
+  // Mostrar 5 productos aleatorios en la sala
+  shuffle(catalog);
+  const positions = [
+    {x:cx-2,y:cy-2},{x:cx,y:cy-2},{x:cx+2,y:cy-2},
+    {x:cx-2,y:cy+2},{x:cx+2,y:cy+2},
+  ];
+  for (let i=0; i<Math.min(5, positions.length); i++) {
+    const pos=positions[i], prod=catalog[i];
+    if (pos.x<shop.x||pos.x>=shop.x+shop.w||pos.y<shop.y||pos.y>=shop.y+shop.h) continue;
+    G.items.push({type:'shop', item:prod.item, sym:prod.sym, name:prod.name, price:prod.price, x:pos.x, y:pos.y});
+  }
+}
+
+function initFog() {
+  G.fog = Array.from({length:CFG.GH}, () => new Array(CFG.GW).fill(0));
+  updateFog();
+}
+
+function updateFog() {
+  const p=G.player;
+  const cls=CFG.CLASSES.find(cl=>cl.id===p.cls);
+  let vision=CFG.VISION_BASE+p.torches*CFG.TORCH_BONUS+(cls?.visionBonus||0);
+  if (G.dungeon?.theme?.mod?.visionMod) vision=Math.max(1,vision+G.dungeon.theme.mod.visionMod);
+  for (let y=0;y<CFG.GH;y++) for (let x=0;x<CFG.GW;x++) if(G.fog[y][x]===2) G.fog[y][x]=1;
+  const vr2=vision*vision;
+  for (let dy=-vision;dy<=vision;dy++)
+    for (let dx=-vision;dx<=vision;dx++) {
+      if (dx*dx+dy*dy>vr2) continue;
+      const tx=p.x+dx, ty=p.y+dy;
+      if (inBounds(tx,ty) && los(p.x,p.y,tx,ty)) G.fog[ty][tx]=2;
+    }
+  // Secretos: se renderizan en capa separada en render(), no modifican el fog
+}
+
+// Medallón de Secretos: revela items y salidas importantes en la niebla
+function applySecretsMap() {
+  if (!G.dungeon || !G.player.secretsMap) return;
+  const T=CFG.T;
+  const importantTypes=new Set(['chest','altar','urn','med_luz','med_inmun','med_invis','med_secret','arrows']);
+  for (const item of G.items) {
+    if (importantTypes.has(item.type) && G.fog[item.y][item.x]===0)
+      G.fog[item.y][item.x]=1;
+  }
+  for (let y=0;y<CFG.GH;y++) for (let x=0;x<CFG.GW;x++) {
+    const t=G.dungeon.grid[y][x];
+    if ((t===T.EXIT||t===T.EXIT_SECRET||t===T.DOOR_R||t===T.DOOR_B||t===T.DOOR_G)&&G.fog[y][x]===0)
+      G.fog[y][x]=1;
+  }
+}
+
+function los(x0,y0,x1,y1) {
+  let dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1,err=dx-dy,cx=x0,cy=y0;
+  while (!(cx===x1&&cy===y1)) {
+    if ((cx!==x0||cy!==y0) && (!inBounds(cx,cy)||G.dungeon.grid[cy][cx]===CFG.T.WALL)) return false;
+    const e2=2*err;
+    if (e2>-dy){err-=dy;cx+=sx;}
+    if (e2< dx){err+=dx;cy+=sy;}
+  }
+  return true;
+}
+
+// ================================================================
+// MÓDULO 8: RENDERIZADO
+// ================================================================
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+let TS = 32;
+
+function computeLayout() {
+  const avail = Math.min(
+    Math.floor(window.innerWidth * .99),
+    Math.floor((window.innerHeight - 152) * .83)
+  );
+  TS = Math.max(18, Math.min(48, Math.floor(avail / CFG.VIEW)));
+  canvas.width  = TS * CFG.VIEW;
+  canvas.height = TS * CFG.VIEW;
+
+  // Sincronizar anchura de todos los contenedores con el canvas
+  const w = canvas.width + 'px';
+  document.getElementById('toolbar').style.width    = w;
+  document.getElementById('toolbar').style.maxWidth = w;
+  document.getElementById('hud-top').style.width    = w;
+  document.getElementById('hud-top').style.maxWidth = w;
+  document.getElementById('inv-bar').style.width    = w;
+  document.getElementById('inv-bar').style.maxWidth = w;
+  const cr=document.getElementById('control-row'); if(cr){cr.style.width=w;cr.style.maxWidth=w;}
+}
+
+function updateCamera() {
+  const p=G.player, half=CFG.VIEW>>1;
+  G.camX = Math.max(0, Math.min(CFG.GW-CFG.VIEW, p.x-half));
+  G.camY = Math.max(0, Math.min(CFG.GH-CFG.VIEW, p.y-half));
+}
+
+function render() {
+  if (!G.dungeon) return;
+  updateCamera();
+  const T=CFG.T, theme=G.dungeon.theme;
+  const isLight = currentTheme === 'light';
+
+  // Fondo del canvas
+  ctx.fillStyle = CANVAS_BG[currentTheme];
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const fs = Math.max(10, Math.floor(TS * .65));
+  ctx.font = `bold ${fs}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Colores de suelo/pared según tema
+  const floorCol = isLight ? theme.lFloor : theme.dFloor;
+  const wallCol  = isLight ? theme.lWall  : theme.dWall;
+
+  // ── Tiles ──
+  const shopRoom = G.dungeon.isShop ? G.dungeon.shopRoom : null;
+  for (let ty=0; ty<CFG.VIEW; ty++) {
+    for (let tx=0; tx<CFG.VIEW; tx++) {
+      const gx=G.camX+tx, gy=G.camY+ty;
+      if (!inBounds(gx,gy)) continue;
+      const fog  = G.fog[gy][gx];
+      const tile = G.dungeon.grid[gy][gx];
+      const px=tx*TS, py=ty*TS, cx2=px+TS/2, cy2=py+TS/2;
+
+      // Suelo especial (alfombra dorada a cuadros) para la sala de la tienda
+      let tileFloorCol = floorCol;
+      if (shopRoom && gx>=shopRoom.x && gx<shopRoom.x+shopRoom.w && gy>=shopRoom.y && gy<shopRoom.y+shopRoom.h) {
+        tileFloorCol = (gx+gy)%2===0
+          ? (isLight ? '#e8d090' : '#3a2c10')
+          : (isLight ? '#d8b860' : '#2a2008');
+      }
+
+      // Tiles no explorados
+      if (fog === 0) {
+        if (isLight) {
+          // En modo claro se intuye la estructura como en un mapa
+          ctx.globalAlpha = 0.1;
+          drawTile(tile, px, py, cx2, cy2, tileFloorCol, wallCol, isLight);
+          ctx.globalAlpha = 1;
+        }
+        continue;
+      }
+
+      ctx.globalAlpha = fog === 1 ? (isLight ? 0.42 : 0.32) : 1.0;
+      drawTile(tile, px, py, cx2, cy2, tileFloorCol, wallCol, isLight);
+
+      // Items (solo visibles)
+      if (fog === 2) {
+        const item = G.items.find(i => i.x===gx && i.y===gy);
+        if (item) {
+          if (isLight) { ctx.shadowColor='rgba(0,0,0,0.45)'; ctx.shadowBlur=2; }
+          if (item.type==='shop') {
+            ctx.fillStyle='#f0c030';
+            ctx.fillText(CFG.ITEM_SYM[item.item]||'?',cx2,cy2);
+            const pf=Math.max(7,Math.floor(TS*.28));
+            ctx.font=`bold ${pf}px monospace`;
+            ctx.fillStyle='#c09000';
+            ctx.fillText(`${item.price}`,cx2,cy2+TS*.32);
+            ctx.font=`bold ${Math.max(10,Math.floor(TS*.65))}px monospace`;
+          } else if (item.type==='tree'||item.type==='tomb') {
+            // Árbol y tumba: color propio del item
+            ctx.fillStyle = item.col || '#888';
+            ctx.fillText(item.sym || '?', cx2, cy2);
+          } else {
+            let col = CFG.ITEM_COL[item.type] || '#888';
+            if (item.type==='chest' && item.opened) col = isLight ? '#707060' : '#383028';
+            ctx.fillStyle = col;
+            ctx.fillText(CFG.ITEM_SYM[item.type] || '?', cx2, cy2);
+          }
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // ── Proyectil ──
+  if (G.projectile) {
+    const age = Date.now() - G.projectile.time;
+    if (age < CFG.PROJ_MS) {
+      const prog = age / CFG.PROJ_MS;
+      const headIdx = Math.min(G.projectile.path.length-1, Math.floor(prog * G.projectile.path.length));
+      ctx.fillStyle = G.projectile.col;
+      for (let i=0; i<=headIdx; i++) {
+        const pp=G.projectile.path[i];
+        const tx2=pp.x-G.camX, ty2=pp.y-G.camY;
+        if (tx2<0||ty2<0||tx2>=CFG.VIEW||ty2>=CFG.VIEW) continue;
+        ctx.globalAlpha = Math.max(0, (1-prog) * (1-(headIdx-i)*.3));
+        ctx.fillText(G.projectile.sym, tx2*TS+TS/2, ty2*TS+TS/2);
+      }
+      ctx.globalAlpha = 1;
+    } else { G.projectile = null; }
+  }
+
+  // ── Enemigos ──
+  for (const e of G.enemies) {
+    if (!inBounds(e.x,e.y) || G.fog[e.y][e.x]!==2) continue;
+    const tx=e.x-G.camX, ty2=e.y-G.camY;
+    if (tx<0||ty2<0||tx>=CFG.VIEW||ty2>=CFG.VIEW) continue;
+    const px=tx*TS, py=ty2*TS;
+    // Barra de vida
+    ctx.fillStyle = isLight ? '#c0b0a0' : '#200';
+    ctx.fillRect(px, py, TS, 3);
+    const hr=e.hp/e.maxHp;
+    ctx.fillStyle = hr>.5?'#0a0':hr>.25?'#aa0':'#a00';
+    ctx.fillRect(px, py, TS*hr, 3);
+    // Símbolo con sombra en modo claro
+    if (isLight) { ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=3; }
+    ctx.fillStyle = e.alert ? brighten(e.col, 1.3) : e.col;
+    ctx.fillText(e.sym, px+TS/2, py+TS/2+1);
+    ctx.shadowBlur = 0;
+  }
+
+  // ── Familiar aliado ──
+  if (G.familiar) {
+    const f=G.familiar, ftx=f.x-G.camX, fty=f.y-G.camY;
+    if (ftx>=0&&fty>=0&&ftx<CFG.VIEW&&fty<CFG.VIEW&&inBounds(f.x,f.y)&&G.fog[f.y][f.x]===2) {
+      const fpx=ftx*TS, fpy=fty*TS;
+      ctx.fillStyle='#002000'; ctx.fillRect(fpx,fpy,TS,3);
+      ctx.fillStyle='#30e060'; ctx.fillRect(fpx,fpy,TS*(f.hp/f.maxHp),3);
+      if (isLight){ctx.shadowColor='rgba(0,0,0,0.6)';ctx.shadowBlur=3;}
+      ctx.fillStyle='#50e080';
+      ctx.fillText(f.sym || 'ω', fpx+TS/2, fpy+TS/2+1);
+      ctx.shadowBlur=0;
+    }
+  }
+
+  // ── Marcadores de spawning (∴ tierra removida antes de aparecer enemigo) ──
+  ctx.font=`bold ${Math.max(10,Math.floor(TS*.65))}px monospace`;
+  for (const s of G.spawning) {
+    if (!inBounds(s.x,s.y)||G.fog[s.y][s.x]!==2) continue;
+    const stx=s.x-G.camX, sty=s.y-G.camY;
+    if (stx<0||sty<0||stx>=CFG.VIEW||sty>=CFG.VIEW) continue;
+    ctx.globalAlpha=0.7+0.3*Math.abs(Math.sin(Date.now()/180));
+    ctx.fillStyle='#9060b0';
+    ctx.fillText('∴',stx*TS+TS/2,sty*TS+TS/2);
+    ctx.globalAlpha=1;
+  }
+
+  // ── Medallón de Secretos: items sobre la niebla (sin modificar el fog) ──
+  if (G.player.secretsMap>0) {
+    const secTypes=new Set(['chest','altar','urn','med_luz','med_inmun','med_invis','med_secret','arrows','mana_pot','familiar_item','gold','potion','key_red','key_blue','key_green']);
+    for (const item of G.items) {
+      if (!secTypes.has(item.type)) continue;
+      const stx=item.x-G.camX, sty=item.y-G.camY;
+      if (stx<0||sty<0||stx>=CFG.VIEW||sty>=CFG.VIEW) continue;
+      if (G.fog[item.y][item.x]===2) continue; // ya visible
+      ctx.globalAlpha=0.55;
+      ctx.fillStyle=CFG.ITEM_COL[item.type]||'#888';
+      ctx.fillText(CFG.ITEM_SYM[item.type]||'?',stx*TS+TS/2,sty*TS+TS/2);
+    }
+    // Salidas visibles
+    for (let sy=0;sy<CFG.GH;sy++) for (let sx=0;sx<CFG.GW;sx++) {
+      if (G.dungeon.grid[sy][sx]!==T.EXIT) continue;
+      if (G.fog[sy][sx]===2) continue;
+      const stx=sx-G.camX,sty=sy-G.camY;
+      if (stx<0||sty<0||stx>=CFG.VIEW||sty>=CFG.VIEW) continue;
+      ctx.globalAlpha=0.55;
+      ctx.fillStyle='#c0a030';
+      ctx.fillText('▼',stx*TS+TS/2,sty*TS+TS/2);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // ── Jugador ──
+  const p=G.player, ptx=p.x-G.camX, pty=p.y-G.camY;
+  if (ptx>=0 && pty>=0 && ptx<CFG.VIEW && pty<CFG.VIEW) {
+    const da = Date.now() - G.lastDmgFlash;
+    if (da < 220) ctx.globalAlpha = .45 + .55*Math.abs(Math.sin(da/18));
+    if (isLight) { ctx.shadowColor='rgba(0,0,0,0.7)'; ctx.shadowBlur=4; }
+    ctx.fillStyle = p.col;
+    ctx.fillText(p.sym, ptx*TS+TS/2, pty*TS+TS/2+1);
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+  }
+
+  drawFloatingMsg();
+}
+
+function drawTile(tile, px, py, cx, cy, floorCol, wallCol, isLight) {
+  const T=CFG.T;
+  // Fondo de suelo para tiles no-pared
+  if (tile !== T.WALL) {
+    ctx.fillStyle = floorCol;
+    ctx.fillRect(px, py, TS, TS);
+    // Patrón sutil de textura
+    if (((px/TS)+(py/TS))%3 === 0) {
+      ctx.fillStyle = brighten(floorCol, isLight ? 0.92 : 1.18);
+      ctx.fillRect(px+TS/2, py+TS/2, 1, 1);
+    }
+  }
+  switch (tile) {
+    case T.WALL:
+      ctx.fillStyle = wallCol; ctx.fillRect(px, py, TS, TS);
+      // Bisel: borde iluminado arriba/izquierda
+      ctx.fillStyle = brighten(wallCol, isLight ? 1.25 : 1.55);
+      ctx.fillRect(px, py, TS, 1); ctx.fillRect(px, py, 1, TS);
+      // Sombra abajo/derecha
+      ctx.fillStyle = brighten(wallCol, isLight ? 0.75 : 0.5);
+      ctx.fillRect(px+TS-1, py, 1, TS); ctx.fillRect(px, py+TS-1, TS, 1);
+      break;
+    case T.EXIT:
+      ctx.fillStyle = isLight ? '#8a7020' : '#c0a030';
+      ctx.fillText('▼', cx, cy); break;
+    case T.EXIT_SECRET: break; // igual que suelo
+    case T.DOOR_R:
+      ctx.fillStyle = isLight ? '#900020' : '#c02828';
+      ctx.fillText('▣', cx, cy); break;
+    case T.DOOR_B:
+      ctx.fillStyle = isLight ? '#1030a0' : '#2840c0';
+      ctx.fillText('▣', cx, cy); break;
+    case T.DOOR_G:
+      ctx.fillStyle = isLight ? '#107830' : '#28a040';
+      ctx.fillText('▣', cx, cy); break;
+    case T.DOOR_GATE:
+      ctx.fillStyle = isLight ? '#706050' : '#b0a070';
+      ctx.fillText('⌗', cx, cy); break;
+    case T.DOOR_GOLD: {
+      // Puerta dorada — no necesita llave, cuesta oro
+      ctx.fillStyle = isLight ? '#9a7000' : '#e0b800';
+      ctx.fillText('▣', cx, cy);
+      const sf = Math.max(7, Math.floor(TS*.3));
+      ctx.font = `bold ${sf}px monospace`;
+      ctx.fillStyle = isLight ? '#7a5800' : '#c09000';
+      ctx.fillText('$', cx + TS*.28, cy - TS*.22);
+      ctx.font = `bold ${Math.max(10,Math.floor(TS*.65))}px monospace`;
+      break;
+    }
+    case T.TRAP:
+      ctx.fillStyle = isLight ? '#902000' : '#c05010';
+      ctx.fillText('✕', cx, cy); break;
+  }
+}
+
+function drawFloatingMsg() {
+  if (!G.messages.length) return;
+  const msg=G.messages[0], age=Date.now()-msg.time;
+  if (age>1400) return;
+  const p=G.player, ptx=p.x-G.camX, pty=p.y-G.camY;
+  if (ptx<0||pty<0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1-age/1400);
+  ctx.font = `bold ${Math.max(9, Math.floor(TS*.43))}px monospace`;
+  ctx.textAlign='center';
+  if (currentTheme==='light') { ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=2; }
+  ctx.fillStyle = msg.col;
+  ctx.fillText(msg.text, ptx*TS+TS/2, pty*TS-(age/1400)*16);
+  ctx.restore();
+}
+
+// ================================================================
+// MÓDULO 9: HUD
+// ================================================================
+
+function updateHUD() {
+  const p=G.player;
+  document.getElementById('hud-lives').innerHTML =
+    Array.from({length:CFG.MAX_LIVES}, (_,i) =>
+      `<span style="color:${i<G.lives?'var(--red)':'var(--border)'};font-size:20px">❤</span>`
+    ).join(' ');
+
+  const hpBar = Array.from({length:p.maxHp}, (_,i) => {
+    const f=i<p.hp, c=p.hp<=3?'var(--red)':p.hp<=6?'#b09030':'var(--green)';
+    return `<span style="color:${f?c:'var(--border)'}">${f?'█':'░'}</span>`;
+  }).join('');
+  document.getElementById('hud-hp').innerHTML = `<span style="font-size:13px">${hpBar}</span>`;
+
+  const isShop = !!G.dungeon?.isShop;
+  let info = isShop ? `🛒 TIENDA · P${G.depth}` : `${G.dungeon?.theme.name||''} · P${G.depth}`;
+  if (p.cls!=='w') info += ` · ${'●'.repeat(Math.max(0,p.mana))}${'○'.repeat(Math.max(0,p.maxMana-p.mana))}`;
+  const hudInfo = document.getElementById('hud-info');
+  hudInfo.textContent = info;
+  if (isShop) {
+    hudInfo.style.color = '#2a1e08';
+    hudInfo.style.background = '#f0c030';
+    hudInfo.style.padding = '2px 8px';
+    hudInfo.style.borderRadius = '6px';
+    hudInfo.style.fontWeight = 'bold';
+  } else {
+    hudInfo.style.color = currentTheme === 'dark' ? '#c8a870' : 'var(--dim)';
+    hudInfo.style.background = 'transparent';
+    hudInfo.style.padding = '0';
+    hudInfo.style.borderRadius = '0';
+    hudInfo.style.fontWeight = 'normal';
+  }
+
+  document.getElementById('hud-gold').textContent = `◆ ${p.gold}`;
+
+  const xpP = Math.floor((G.xp%(G.xpNext||50))/(G.xpNext||50)*10);
+  const xpFill  = currentTheme === 'dark' ? '#e0b840' : '#8a6010';
+  const xpEmpty = currentTheme === 'dark' ? '#4a3418' : '#b0a080';
+  document.getElementById('hud-xp').innerHTML =
+    `<span style="color:${currentTheme==='dark'?'#c8a870':'var(--dim)'}">Nv.${G.playerLevel} </span>` +
+    `<span style="color:${xpFill}">${'▪'.repeat(xpP)}</span>` +
+    `<span style="color:${xpEmpty}">${'▪'.repeat(10-xpP)}</span>`;
+
+  const msg=G.messages[0], el=document.getElementById('hud-msg');
+  if (msg) {
+    el.style.opacity = Math.max(.2, 1-(Date.now()-msg.time)/3000);
+    el.style.color   = msg.col;
+    el.textContent   = '› ' + msg.text;
+  }
+}
+
+function updateActionBar() {
+  const btn = document.getElementById('btn-shoot');
+  if (!G.player || G.player.cls==='w') { btn.style.display='none'; return; }
+  btn.style.display='block';
+  if (G.player.cls==='a') {
+    btn.textContent=`◎  DISPARAR  ↑${G.player.arrows}`; btn.style.borderColor='#305030'; btn.style.color='#50d070';
+  } else {
+    const famInfo = G.familiar ? ` Ɵ${G.familiar.hp}` : ' Ɵ✗';
+    btn.textContent=`✦  LANZAR  ${'●'.repeat(Math.max(0,G.player.mana))}${famInfo}`; btn.style.borderColor='#304060'; btn.style.color='#5080e0';
+  }
+}
+
+// ── Barra de inventario ──
+function updateInventoryBar() {
+  if (!G.player) return;
+  const p = G.player;
+
+  // Contadores de consumibles
+  const countsEl = document.getElementById('inv-counts');
+  const counts = [];
+  if (p.potions > 0)   counts.push(`<span class="inv-count" onclick="useConsumable('potion')" style="color:#d83050" title="Usar poción (H)">♥×${p.potions}</span>`);
+  if (p.food > 0)      counts.push(`<span class="inv-count" onclick="useConsumable('food')" style="color:#70b838" title="Comer (F)">%×${p.food}</span>`);
+  if (p.mana_pots > 0) counts.push(`<span class="inv-count" onclick="useConsumable('mana_pot')" style="color:#5070e8" title="Poción de maná (M)">✦×${p.mana_pots}</span>`);
+  if (p.torches > 0)   counts.push(`<span class="inv-count" style="color:#e07828;cursor:default" title="Antorchas">ı×${p.torches}</span>`);
+  if (p.cls==='a')     counts.push(`<span class="inv-count" style="color:${p.arrows>0?'#c0c070':'var(--red)'};cursor:default" title="Flechas">↑×${p.arrows}</span>`);
+  countsEl.innerHTML = counts.length ? counts.join('') : `<span style="color:var(--dim);font-size:11px">vacío</span>`;
+
+  // Slots de equipables
+  const slotsEl = document.getElementById('inv-slots');
+  slotsEl.innerHTML = Array.from({length: CFG.MAX_SLOTS}, (_, i) => {
+    const item = p.slots[i];
+    if (!item) return `<div class="inv-slot empty" title="Slot vacío">·</div>`;
+    const charges = item.charges > 1 ? `<span class="slot-charges">${item.charges}</span>` : '';
+    return `<div class="inv-slot" onclick="useSlot(${i})" style="color:${item.col}" title="${item.name}">${item.sym}${charges}</div>`;
+  }).join('');
+}
+
+// Usar un objeto del slot (llave: mensaje, medallón: efecto)
+function useSlot(i) {
+  const p = G.player;
+  const item = p.slots[i];
+  if (!item) return;
+  if (item.type.startsWith('key_')) {
+    addMsg(`${item.name}: úsala en una puerta del mismo color`,'#c09030');
+    return;
+  }
+  // Medallones
+  const med = CFG.MEDALLIONS.find(m=>m.type===item.type);
+  if (!med) return;
+  sfx('altar');
+  switch (item.type) {
+    case 'med_luz':
+      // Elimina niebla del nivel actual permanentemente
+      for (let y=0;y<CFG.GH;y++) for (let x=0;x<CFG.GW;x++) if(G.fog[y][x]===0) G.fog[y][x]=1;
+      p.lightFog=true;
+      addMsg(`Medallón de Luz: nivel revelado`,'#f0e060');
+      break;
+    case 'med_inmun':
+      p.ghostImmune=med.levels;
+      addMsg(`Medallón de Inmunidad: ${med.levels} nivel`,'#60c0f0');
+      break;
+    case 'med_invis':
+      p.invisible=med.levels;
+      addMsg(`Medallón de Invisib.: ${med.levels} niveles`,'#b0b0b0');
+      break;
+    case 'med_secret':
+      p.secretsMap=med.levels;
+      addMsg(`Medallón de Secretos: ${med.levels} niveles`,'#e080e0');
+      break;
+  }
+  item.charges = (item.charges||1) - 1;
+  if (item.charges <= 0) p.slots.splice(i,1);
+  render(); updateHUD(); updateInventoryBar();
+}
+
+// Usar consumible por tipo
+function useConsumable(type) {
+  if (G.screen!=='playing'||G.paused) return;
+  const p = G.player;
+  if (type==='potion') {
+    if (!p.potions) { addMsg('Sin pociones','var(--dim)'); return; }
+    const h=Math.min(p.maxHp-p.hp,3);
+    p.potions--; p.hp=Math.min(p.maxHp,p.hp+3);
+    sfx('potion'); addMsg(h>0?`+${h} VP`:'VP llenos','var(--green)');
+  } else if (type==='food') {
+    if (!p.food) { addMsg('Sin comida','var(--dim)'); return; }
+    p.food--;
+    if (p.hp<p.maxHp){ p.hp=Math.min(p.maxHp,p.hp+1); sfx('pickup'); addMsg('+1 VP (comida)','#70b030'); }
+    else addMsg('VP llenos','#505040');
+  } else if (type==='mana_pot') {
+    if (!p.mana_pots) { addMsg('Sin pociones de maná','var(--dim)'); return; }
+    p.mana_pots--; p.mana=Math.min(p.maxMana,p.mana+3);
+    sfx('potion'); addMsg('+3 Maná','#5070e8');
+  }
+  render(); updateHUD(); updateInventoryBar();
+}
+
+// Añadir objeto a slot (apila cargas si ya tienes uno del mismo tipo; devuelve false si inventario lleno)
+function addToSlot(slotItem) {
+  const p = G.player;
+  const existing = p.slots.find(s => s.type === slotItem.type);
+  if (existing) { existing.charges = (existing.charges||1) + (slotItem.charges||1); return true; }
+  if (p.slots.length >= CFG.MAX_SLOTS) {
+    addMsg('¡Inventario lleno!','var(--red)');
+    return false;
+  }
+  p.slots.push(slotItem);
+  return true;
+}
+
+// ================================================================
+// MÓDULO 10: MOVIMIENTO DEL JUGADOR
+// ================================================================
+
+let inputLocked = false;
+
+function tryMove(dx, dy) {
+  if (inputLocked || G.screen!=='playing' || G.paused) return;
+  const p=G.player, nx=p.x+dx, ny=p.y+dy, T=CFG.T;
+  if (!inBounds(nx,ny)) return;
+  const tile = G.dungeon.grid[ny][nx];
+  if (tile===T.WALL) return;
+  if (dx!==0||dy!==0) p.facing = {dx, dy};
+
+  // Reja (Fortaleza) — se abre libremente, libera enemigos al otro lado
+  if (tile===T.DOOR_GATE) {
+    G.dungeon.grid[ny][nx]=T.FLOOR;
+    sfx('door'); addMsg('¡Reja abierta! Los enemigos pueden salir','#c0c0a0');
+    render(); updateHUD(); return;
+  }
+
+  // Puerta dorada — cuesta oro en lugar de llave
+  if (tile===T.DOOR_GOLD) {
+    const cost = 30 + G.depth * 3;
+    if (p.gold < cost) { addMsg(`Puerta dorada: necesitas ${cost} ◆`,'#e0b800'); return; }
+    p.gold -= cost;
+    G.dungeon.grid[ny][nx] = T.FLOOR;
+    sfx('door'); addMsg(`Puerta dorada abierta (-${cost} ◆)`,'#e0b800');
+    render(); updateHUD(); updateInventoryBar(); return;
+  }
+
+  // Puertas de color
+  if (tile===T.DOOR_R||tile===T.DOOR_B||tile===T.DOOR_G) {
+    const cm={[T.DOOR_R]:'key_red',[T.DOOR_B]:'key_blue',[T.DOOR_G]:'key_green'};
+    const nm={key_red:'roja',key_blue:'azul',key_green:'verde'};
+    const need=cm[tile];
+    const ki=p.slots.findIndex(s=>s.type===need);
+    if (ki===-1) { addMsg(`Necesitas llave ${nm[need]}`,'#c08030'); return; }
+    const keySlot=p.slots[ki];
+    keySlot.charges=(keySlot.charges||1)-1;
+    if (keySlot.charges<=0) p.slots.splice(ki,1);
+    G.dungeon.grid[ny][nx]=T.FLOOR;
+    sfx('door'); addMsg('Puerta abierta','var(--green)');
+    render(); updateHUD(); updateInventoryBar(); return;
+  }
+
+  // Enemigo
+  const ei = G.enemies.findIndex(e=>e.x===nx&&e.y===ny);
+  if (ei!==-1) { attackEnemy(ei); return; }
+
+  // Mover
+  sfx('step');
+  p.x=nx; p.y=ny;
+  // Decrementar invisibilidad
+  if (p.invisible > 0) { p.invisible--; if (!p.invisible) addMsg('Invisibilidad terminada','#b0b0b0'); }
+
+  // Salida (la secreta solo funciona con el Medallón de Secretos activo; si no, es suelo normal)
+  if (tile===T.EXIT || (tile===T.EXIT_SECRET && G.player.secretsMap>0)) {
+    if (tile===T.EXIT_SECRET) { G.dungeon.grid[ny][nx]=T.EXIT; addMsg('¡Salida secreta!','var(--gold)'); }
+    sfx('escape'); addMsg('¡Escapas!','var(--gold)');
+    inputLocked=true;
+    updateFog(); render(); updateHUD();
+    setTimeout(()=>{
+      G.depth++;
+      showPendingLevelUps(()=>{ nextDungeon(); inputLocked=false; });
+    }, 700);
+    return;
+  }
+  // Trampa
+  if (tile===T.TRAP) { sfx('trap'); takeDamage(1+Math.floor(G.depth/3),'trampa'); G.dungeon.grid[ny][nx]=T.FLOOR; } // trampa de un solo uso
+  // Item
+  const ii = G.items.findIndex(i=>i.x===nx&&i.y===ny);
+  if (ii!==-1) pickupItem(ii);
+
+  updateFog(); render(); updateHUD(); updateInventoryBar();
+}
+
+function moveToward(tileX, tileY) {
+  const p=G.player, dx=tileX-p.x, dy=tileY-p.y;
+  if (Math.abs(dx)<0.7 && Math.abs(dy)<0.7) return;
+  if (Math.abs(dx)>=Math.abs(dy)) tryMove(Math.sign(dx),0);
+  else tryMove(0,Math.sign(dy));
+}
+
+// ================================================================
+// MÓDULO 11: DISPARO
+// ================================================================
+
+function shootProjectile() {
+  if (inputLocked||G.screen!=='playing'||G.paused) return;
+  const p=G.player;
+  if (p.cls==='w') return;
+  const{dx,dy}=p.facing;
+  if (p.cls==='a') {
+    if (p.arrows <= 0) { addMsg('¡Sin flechas!','var(--red)'); return; }
+    p.arrows--;
+  }
+  if (p.cls==='m') {
+    if (p.mana<=0) { addMsg('Sin maná','#5070d0'); return; }
+    p.mana--;
+  }
+
+  const isA=p.cls==='a';
+  sfx(isA?'shoot_a':'shoot_m');
+
+  const path=[]; let hitIdx=-1;
+  let x=p.x+dx, y=p.y+dy;
+  const projRange = isA ? CFG.PROJ_RANGE : (CFG.GW + CFG.GH); // mago: alcance ilimitado hasta pared
+  for (let i=0; i<projRange; i++) {
+    if (!inBounds(x,y)||G.dungeon.grid[y][x]===CFG.T.WALL) break;
+    path.push({x,y});
+    const ei=G.enemies.findIndex(e=>e.x===x&&e.y===y);
+    if (ei!==-1) { hitIdx=ei; break; }
+    x+=dx; y+=dy;
+  }
+
+  G.projectile={path, time:Date.now(), col:isA?'#d0b040':'#5090f0', sym:isA?'·':'★'};
+
+  if (hitIdx!==-1) {
+    const e=G.enemies[hitIdx];
+    const isCrit = Math.random() < 0.10;
+    let dmg=Math.max(1, p.atk+(isA?1:2)+ri(2)-1);
+    if (isCrit) { dmg*=2; addMsg('¡CRÍTICO!','#f0e040'); }
+    e.hp-=dmg;
+    addMsg(`${isA?'◎':'✦'} -${dmg} ${e.name}`, isA?'#80c060':'#6080e0');
+    if (e.hp<=0) {
+      sfx('death'); G.totalKills++; gainXP(e.xp);
+      addMsg(`${e.name} derrotado! +${e.xp}XP`,'var(--gold)');
+      const roll=Math.random();
+      if (roll<0.10) G.items.push({type:'gold',x:e.x,y:e.y,amount:2+ri(4*G.depth)});
+      else if (roll<0.15) G.items.push({type:'food',x:e.x,y:e.y,amount:1});
+      G.enemies.splice(hitIdx,1);
+    }
+  } else {
+    addMsg(path.length?'Fallo':'Bloqueado','#504040');
+  }
+  render(); updateHUD(); updateInventoryBar();
+}
+
+// ================================================================
+// MÓDULO 12: ITEMS
+// ================================================================
+
+// Encuentra posición válida para el familiar cerca del jugador
+function findFamiliarSpawn() {
+  const p=G.player;
+  const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1},
+              {x:1,y:1},{x:-1,y:1},{x:1,y:-1},{x:-1,y:-1}];
+  for (const d of dirs) {
+    const nx=p.x+d.x, ny=p.y+d.y;
+    if (inBounds(nx,ny)&&G.dungeon.grid[ny][nx]===CFG.T.FLOOR) return {x:nx,y:ny};
+  }
+  const floors=getFloorTiles().filter(t=>Math.abs(t.x-p.x)+Math.abs(t.y-p.y)<6);
+  return floors.length?floors[ri(floors.length)]:{x:p.x,y:p.y};
+}
+
+function pickupItem(idx) {
+  const item=G.items[idx], p=G.player;
+
+  // ── Decoración ambiental: ignorar ──
+  if (item.type==='decor') return;
+
+  // ── Familiar aliado (color y stats por clase) ──
+  if (item.type==='familiar_item') {
+    if (G.familiar) { addMsg('Ya tienes un compañero','#50e080'); return; }
+    const famCols={w:'#50e080',a:'#e0d050',m:'#5090e0'};
+    const famSyms={w:'ω',a:'ω',m:'Ɵ'};
+    const famHpBase={w:4,a:3,m:5};
+    const famAtkBase={w:1+ri(2),a:1,m:2+ri(2)};
+    const famHp=famHpBase[p.cls]+Math.floor(G.depth/2);
+    const fpos=findFamiliarSpawn();
+    G.familiar={x:fpos.x,y:fpos.y,hp:famHp,maxHp:famHp,atk:famAtkBase[p.cls],sym:famSyms[p.cls],col:famCols[p.cls]};
+    sfx('levelup'); addMsg('¡Un aliado te acompaña!',famCols[p.cls]);
+    G.items.splice(idx,1); return;
+  }
+
+  // ── Árbol del bosque: 50% manzana ──
+  if (item.type==='tree') {
+    if (Math.random()<0.5) {
+      sfx('pickup');
+      if (p.hp<p.maxHp){p.hp=Math.min(p.maxHp,p.hp+1);addMsg('Manzana: +1 VP','#70b838');}
+      else{p.food=Math.min(5,p.food+1);addMsg('Manzana guardada','#70b838');}
+    } else { addMsg('Árbol seco...','#405030'); }
+    G.items.splice(idx,1); return;
+  }
+
+  // ── Tumba de cripta: despierta un muerto (con delay) ──
+  if (item.type==='tomb') {
+    sfx('trap'); addMsg('La tumba se agita...','#9060b0');
+    G.items.splice(idx,1);
+    G.spawning.push({x:item.x, y:item.y, turns:1});
+    return;
+  }
+
+  // ── NPC Mercader (no se recoge, solo saluda) ──
+  if (item.type==='merchant') {
+    addMsg('¡Bienvenido! Pisa los items para comprar','#40d0d0');
+    return;
+  }
+
+  // ── Item de tienda: comprar con oro ──
+  if (item.type==='shop') {
+    if (p.gold < item.price) { addMsg(`Faltan ${item.price-p.gold} ◆ para ${item.name}`,'var(--red)'); return; }
+    p.gold -= item.price;
+    sfx('gold');
+    // Aplicar el efecto del producto
+    switch(item.item) {
+      case 'potion':    p.potions   = Math.min(5, p.potions+1);   addMsg(`${item.name} (-${item.price}◆)`,'#d83050'); break;
+      case 'mana_pot':  p.mana_pots = Math.min(3, p.mana_pots+1); addMsg(`${item.name} (-${item.price}◆)`,'#5070e8'); break;
+      case 'food':      p.food      = Math.min(5, p.food+1);      addMsg(`${item.name} (-${item.price}◆)`,'#70b838'); break;
+      case 'arrows':    p.arrows    = Math.min(20, p.arrows+5);   addMsg(`+5 Flechas (-${item.price}◆)`,'#c0c070'); break;
+      case 'torch':     p.torches++;                               addMsg(`${item.name} (-${item.price}◆)`,'#e07828'); break;
+      case 'key_red':   addToSlot({type:'key_red',   sym:'⚷',col:'#d83838',name:'Llave Roja',  charges:1}); addMsg(`${item.name} (-${item.price}◆)`,'#d83838'); break;
+      case 'key_blue':  addToSlot({type:'key_blue',  sym:'⚷',col:'#3850d8',name:'Llave Azul',  charges:1}); addMsg(`${item.name} (-${item.price}◆)`,'#3850d8'); break;
+      case 'key_green': addToSlot({type:'key_green', sym:'⚷',col:'#38b850',name:'Llave Verde', charges:1}); addMsg(`${item.name} (-${item.price}◆)`,'#38b850'); break;
+      default: {
+        const med=CFG.MEDALLIONS.find(m=>m.type===item.item);
+        if (med) addToSlot({type:med.type,sym:med.sym,col:med.col,name:med.name,charges:1});
+        addMsg(`${item.name} (-${item.price}◆)`,'#e0b800'); break;
+      }
+    }
+    G.items.splice(idx,1); return;
+  }
+
+  // ── Consumibles: van a contadores ──
+  if (item.type==='gold') {
+    sfx('gold'); p.gold+=item.amount; G.totalGold+=item.amount;
+    addMsg(`+${item.amount} oro`,'var(--gold)'); G.items.splice(idx,1); return;
+  }
+  if (item.type==='potion') {
+    // Auto-recarga: si HP < máx, se aplica inmediatamente
+    if (p.hp < p.maxHp) {
+      sfx('potion'); const h=Math.min(p.maxHp-p.hp,3); p.hp=Math.min(p.maxHp,p.hp+3);
+      addMsg(`+${h} VP (poción)`,'#d83050');
+    } else if (p.potions<5) {
+      sfx('pickup'); p.potions++;
+      addMsg(`Poción guardada (${p.potions}/5)`,'#d83050');
+    } else { addMsg('Pociones al máximo','var(--dim)'); return; }
+    G.items.splice(idx,1); return;
+  }
+  if (item.type==='food') {
+    // Auto-recarga: si HP < máx, se aplica inmediatamente
+    if (p.hp < p.maxHp) {
+      sfx('pickup'); p.hp=Math.min(p.maxHp,p.hp+1);
+      addMsg('+1 VP (comida)','#70b838');
+    } else if (p.food<5) {
+      sfx('pickup'); p.food++;
+      addMsg(`Comida guardada (${p.food}/5)`,'#70b838');
+    } else { addMsg('Comida al máximo','var(--dim)'); return; }
+    G.items.splice(idx,1); return;
+  }
+  if (item.type==='mana_pot') {
+    // Guerrero y Arquero convierten pociones de maná en oro
+    if (p.cls!=='m') {
+      const gold=8+ri(6); p.gold+=gold; G.totalGold+=gold;
+      sfx('gold'); addMsg(`Poción maná → +${gold}◆`,'var(--gold)'); G.items.splice(idx,1); return;
+    }
+    // Auto-recarga: si maná < máx, se aplica inmediatamente
+    if (p.mana < p.maxMana) {
+      sfx('potion'); const m=Math.min(p.maxMana-p.mana, item.amount||3); p.mana=Math.min(p.maxMana,p.mana+m);
+      addMsg(`+${m} Maná`,'#5070e8');
+    } else if (p.mana_pots<3) {
+      sfx('pickup'); p.mana_pots++;
+      addMsg(`Maná guardado (${p.mana_pots}/3)`,'#5070e8');
+    } else { addMsg('Maná al máximo','var(--dim)'); return; }
+    G.items.splice(idx,1); return;
+  }
+  if (item.type==='torch') {
+    sfx('torch'); p.torches++;
+    addMsg(`+1 Antorcha (${p.torches})`,'#e07828'); G.items.splice(idx,1); updateFog(); return;
+  }
+  if (item.type==='arrows') {
+    // Guerrero y Mago convierten flechas en oro
+    if (p.cls!=='a') {
+      const gold=3+ri(5); p.gold+=gold; G.totalGold+=gold;
+      sfx('gold'); addMsg(`Flechas → +${gold}◆`,'var(--gold)'); G.items.splice(idx,1); return;
+    }
+    const got=Math.min(item.amount, 20-p.arrows);
+    if (got<=0){addMsg('Flechas al máximo (20)','var(--dim)');return;}
+    sfx('pickup'); p.arrows+=got;
+    addMsg(`+${got} flechas (${p.arrows}/20)`,'#c0c070'); G.items.splice(idx,1); return;
+  }
+
+  // ── Cofre y urna: interacción in-situ ──
+  if (item.type==='chest') {
+    if (!item.opened) {
+      sfx('chest'); item.opened=true;
+      const g=10+ri(15*G.depth); p.gold+=g; G.totalGold+=g;
+      addMsg(`Cofre: +${g} oro`,'var(--gold)');
+      // El cofre puede dar flechas al arquero
+      if (p.cls==='a' && p.arrows<20) { p.arrows=Math.min(20,p.arrows+3); addMsg('+3 flechas','#c0c070'); }
+      if (Math.random()<.3){p.hp=Math.min(p.maxHp,p.hp+2);addMsg('+2 VP (cofre)','var(--green)');}
+    }
+    return;
+  }
+  if (item.type==='urn') {
+    if (!item.opened) {
+      sfx('altar'); item.opened=true;
+      const roll=Math.random();
+      if (roll<0.35){const g=5+ri(20*G.depth);p.gold+=g;G.totalGold+=g;addMsg(`Urna: +${g} oro`,'var(--gold)');}
+      else if (roll<0.60){p.hp=Math.min(p.maxHp,p.hp+3);addMsg('Urna: +3 VP','var(--green)');}
+      else if (roll<0.80){sfx('trap');takeDamage(2+Math.floor(G.depth/2),'urna maldita',false);addMsg('¡Urna maldita!','var(--red)');}
+      else{sfx('trap');p.atk=Math.max(1,p.atk-1);addMsg('Maldición: -1 ATK','var(--red)');}
+    }
+    return;
+  }
+  if (item.type==='altar') {
+    sfx('altar');
+    if (p.cls==='m') {
+      p.mana=p.maxMana; p.altarBuff=true;
+      addMsg('Altar: Maná restaurado · +daño','#8050d0');
+    } else if (p.cls==='w') {
+      // Guerrero: +1 VP permanente al máximo
+      if (p.maxHp < CFG.MAX_HP+4) { p.maxHp++; p.hp=Math.min(p.maxHp,p.hp+1); addMsg('Altar: +1 VP máximo','#a060c0'); }
+      else { p.hp=Math.min(p.maxHp,p.hp+3); addMsg('Altar: +3 VP','#a060c0'); }
+    } else if (p.cls==='a') {
+      // Arquero: +8 flechas benditas
+      const got=Math.min(8,20-p.arrows); p.arrows+=got;
+      addMsg(`Altar: +${got} flechas (${p.arrows}/20)`,'#a060c0');
+    }
+    // El altar también cura al familiar
+    if (G.familiar) { G.familiar.hp=Math.min(G.familiar.maxHp,G.familiar.hp+2); addMsg('El aliado se recupera (+2VP)','#50e080'); }
+    G.items.splice(idx,1); return;
+  }
+
+  // ── Slot items: llaves y medallones ──
+  if (CFG.SLOT_ITEMS.has(item.type)) {
+    const colMap={key_red:'#d83838',key_blue:'#3850d8',key_green:'#38b850'};
+    const nameMap={key_red:'Llave Roja',key_blue:'Llave Azul',key_green:'Llave Verde'};
+    const med=CFG.MEDALLIONS.find(m=>m.type===item.type);
+    const slotItem={
+      type:item.type,
+      sym:CFG.ITEM_SYM[item.type],
+      col:med?med.col:(colMap[item.type]||'#888'),
+      name:med?med.name:(nameMap[item.type]||item.type),
+      charges:1,
+    };
+    if (addToSlot(slotItem)) {
+      sfx(item.type.startsWith('key')?'key':'altar');
+      addMsg(`+${slotItem.name}`,'var(--gold)');
+      G.items.splice(idx,1);
+    }
+    return;
+  }
+}
+
+// ================================================================
+// MÓDULO 13: COMBATE CUERPO A CUERPO
+// ================================================================
+
+function attackEnemy(idx) {
+  const p=G.player, e=G.enemies[idx];
+  let dmg=Math.max(1, p.atk+ri(2)-1);
+  const isCrit = Math.random() < 0.10;
+  if (isCrit) { dmg*=2; addMsg('¡CRÍTICO!','#f0e040'); }
+  if (p.cls==='m'&&p.altarBuff&&p.mana>0){dmg+=2;p.mana--;if(!p.mana)p.altarBuff=false;}
+  sfx('attack'); e.hp-=dmg; addMsg(`-${dmg} ${e.name}`,'var(--red)');
+  if (e.hp<=0) {
+    sfx('death'); G.totalKills++; gainXP(e.xp);
+    addMsg(`${e.name} derrotado! +${e.xp}XP`,'var(--gold)');
+    // Drop: 10% oro, 5% comida; premium siempre deja oro
+    const roll=Math.random();
+    if (e.premium) G.items.push({type:'gold',x:e.x,y:e.y,amount:5+ri(8*G.depth)});
+    else if (roll<0.10) G.items.push({type:'gold',x:e.x,y:e.y,amount:2+ri(4*G.depth)});
+    else if (roll<0.15) G.items.push({type:'food',x:e.x,y:e.y,amount:1});
+    // Rata Albina premium: maldición al morir (-1 ATK temporal)
+    if (e.premium && e.id==='rat') {
+      G.player.atk=Math.max(1,G.player.atk-1);
+      addMsg('¡Maldición de la rata! -1 ATK','#f0f0f0');
+      sfx('trap');
+    }
+    // Vampiro premium: ya absorbió HP durante el combate (ver attackEnemy)
+    // Rey Esqueleto premium: XP doble ya aplicado en e.xp
+    // Mago: 10% recupera 1 maná al matar
+    if (G.player.cls==='m'&&G.player.mana<G.player.maxMana&&Math.random()<0.10) {
+      G.player.mana++; addMsg('+1 Maná','#5070e8');
+    }
+    G.enemies.splice(idx,1); render(); updateHUD(); return;
+  }
+  if (p.cls!=='a') {
+    const d=Math.max(0,e.atk-p.def+ri(2)-1);
+    if (d>0) takeDamage(d,e.name,false);
+    else addMsg(`${e.name} falla`,'#507050');
+  }
+  render(); updateHUD();
+}
+
+function takeDamage(amount, source='', doRender=true) {
+  const p=G.player;
+  if (p.cls==='w'&&p.hp<=3&&!p.berserk){p.atk++;p.berserk=true;addMsg('¡Frenesí!','#e05020');}
+  sfx('player_hit');
+  p.hp=Math.max(0,p.hp-amount); G.lastDmgFlash=Date.now();
+  addMsg(`-${amount} VP (${source})`,'var(--red)');
+  if (p.hp<=0){G.lives--;G.lives<=0?showGameOver():showDeathScreen();return;}
+  if (doRender){render();updateHUD();}
+}
+
+// ================================================================
+// MÓDULO 14: IA DE ENEMIGOS
+// ================================================================
+
+function enemyTick() {
+  if (G.screen!=='playing'||G.paused||!G.dungeon) return;
+  const p=G.player, T=CFG.T;
+
+  // Cola de spawning (tumbas de cripta: turno de transición ∴ → enemigo)
+  for (let i=G.spawning.length-1;i>=0;i--) {
+    const s=G.spawning[i];
+    s.turns--;
+    if (s.turns<=0) {
+      const opts=CFG.ENEMY_DEFS.filter(e=>e.id==='ske'||e.id==='gho');
+      const def=opts[ri(opts.length)], b=Math.floor(G.depth/2);
+      G.enemies.push({...def,x:s.x,y:s.y,hp:def.hp+b,maxHp:def.maxHp+b,atk:def.atk+Math.floor(G.depth/3),alert:true});
+      addMsg('¡El muerto se levanta!','#9060b0');
+      sfx('trap');
+      G.spawning.splice(i,1);
+    }
+  }
+  for (const e of G.enemies) {
+    const dist=Math.abs(e.x-p.x)+Math.abs(e.y-p.y);
+    // Invisibilidad: los enemigos no detectan al jugador
+    const detectDist = p.invisible > 0 ? 0 : e.detect;
+    if (dist<=detectDist) {
+      e.alert=true;
+
+      // ── Comportamientos diferenciados por tipo ──
+
+      // Rata: huye si tiene menos del 30% HP
+      if (e.id==='rat' && e.hp/e.maxHp < 0.30) {
+        const fdx=-Math.sign(p.x-e.x), fdy=-Math.sign(p.y-e.y);
+        const fDirs=[[fdx,0],[0,fdy],[fdx,fdy]];
+        for (const[mdx,mdy]of fDirs){
+          const nx=e.x+mdx,ny=e.y+mdy;
+          if(!inBounds(nx,ny))continue;
+          const t=G.dungeon.grid[ny][nx];
+          if(t===T.WALL||t===T.DOOR_R||t===T.DOOR_B||t===T.DOOR_G||t===T.DOOR_GOLD||t===T.DOOR_GATE)continue;
+          if(G.enemies.some(o=>o!==e&&o.x===nx&&o.y===ny))continue;
+          if(nx===p.x&&ny===p.y)continue;
+          e.x=nx;e.y=ny;break;
+        }
+        continue;
+      }
+
+      // Esqueleto: centinela — no deambula, solo persigue al detectar
+      // (alert ya está en true, persigue normalmente — sin deambular, ver abajo)
+
+      // Bruja: kiting — si está adyacente se aleja en lugar de atacar
+      if ((e.id==='wit'||e.premium) && dist===1) {
+        const fdx=-Math.sign(p.x-e.x), fdy=-Math.sign(p.y-e.y);
+        for (const[mdx,mdy]of[[fdx,0],[0,fdy],[-fdx,0],[0,-fdy]]){
+          const nx=e.x+mdx,ny=e.y+mdy;
+          if(!inBounds(nx,ny))continue;
+          const t=G.dungeon.grid[ny][nx];
+          if(t===T.WALL||t===T.DOOR_R||t===T.DOOR_B||t===T.DOOR_G||t===T.DOOR_GOLD||t===T.DOOR_GATE||t===T.TRAP)continue;
+          if(G.enemies.some(o=>o!==e&&o.x===nx&&o.y===ny))continue;
+          if(nx===p.x&&ny===p.y)continue;
+          e.x=nx;e.y=ny;break;
+        }
+        continue;
+      }
+
+      // Murciélago: movimiento errático — 40% ignora la dirección óptima
+      let dirs;
+      if (e.id==='bat' && Math.random()<0.40) {
+        dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+        shuffle(dirs);
+      } else {
+        dirs=Math.abs(p.x-e.x)>=Math.abs(p.y-e.y)
+          ?[[Math.sign(p.x-e.x),0],[0,Math.sign(p.y-e.y)],[0,-Math.sign(p.y-e.y)],[-Math.sign(p.x-e.x),0]]
+          :[[0,Math.sign(p.y-e.y)],[Math.sign(p.x-e.x),0],[-Math.sign(p.x-e.x),0],[0,-Math.sign(p.y-e.y)]];
+        // Fantasma: añade movimientos diagonales para poder rodear obstáculos
+        if (e.id==='gho') dirs.push([Math.sign(p.x-e.x),Math.sign(p.y-e.y)],[-Math.sign(p.x-e.x),Math.sign(p.y-e.y)]);
+      }
+      for (const[mdx,mdy]of dirs){
+        const nx=e.x+mdx,ny=e.y+mdy;
+        if (!inBounds(nx,ny)) continue;
+        const t=G.dungeon.grid[ny][nx];
+        if (t===T.WALL||t===T.DOOR_R||t===T.DOOR_B||t===T.DOOR_G) continue;
+        // Trampas bloquean a enemigos débiles (tier 1)
+        if (t===T.TRAP && e.tier===1) continue;
+        // Cofres y urnas bloquean a todos los enemigos
+        if (G.items.some(it=>(it.type==='chest'||it.type==='urn')&&it.x===nx&&it.y===ny)) continue;
+        if (G.enemies.some(o=>o!==e&&o.x===nx&&o.y===ny)) continue;
+        if (nx===p.x&&ny===p.y){
+          // Fantasmas bloqueados por inmunidad
+          if (e.id==='gho' && p.ghostImmune>0) { addMsg('¡Inmune!','#60c0f0'); break; }
+          // Espectro premium: ignora DEF del jugador
+          const ignDef = e.premium && e.id==='gho';
+          const d=Math.max(0,e.atk-(ignDef?0:p.def));
+          if (d>0) {
+            takeDamage(d,e.name);
+            // Vampiro premium: se cura al golpear
+            if (e.premium && e.id==='bat') { e.hp=Math.min(e.maxHp,e.hp+1); }
+          } else addMsg(`${e.name} falla`,'#506050');
+          break;
+        }
+        e.x=nx; e.y=ny; break;
+      }
+    } else {
+      e.alert=false;
+      // Esqueleto centinela: no deambula, permanece quieto
+      if (e.id==='ske') continue;
+      if (Math.random()<.4){
+        const[mdx,mdy]=[[1,0],[-1,0],[0,1],[0,-1]][ri(4)];
+        const nx=e.x+mdx,ny=e.y+mdy;
+        if(inBounds(nx,ny)&&G.dungeon.grid[ny][nx]===T.FLOOR&&!G.enemies.some(o=>o!==e&&o.x===nx&&o.y===ny)&&!(nx===p.x&&ny===p.y)){e.x=nx;e.y=ny;}
+      }
+    }
+  }
+  render(); updateHUD();
+  familiarTick();
+  render();
+  saveGameState();
+}
+
+// ================================================================
+// MÓDULO 15: PROGRESIÓN
+// ================================================================
+
+function gainXP(amount) {
+  G.xp+=amount;
+  const needed = G.xpNext * (G.playerLevel + G.pendingLevelUps);
+  if (G.xp >= needed) {
+    G.pendingLevelUps++;
+    sfx('levelup');
+    addMsg(`¡Nivel ${G.playerLevel + G.pendingLevelUps}! (elige al salir)`,'#f0d040');
+  }
+}
+
+// ================================================================
+// MÓDULO 16: CARGA DE MAZMORRAS
+// ================================================================
+
+function loadDungeon(depth) {
+  G.screen = 'playing'; // asegurar estado correcto al cargar mazmorra
+  const isShop = depth > 1 && depth % 5 === 0;
+  G.dungeon = isShop ? generateShopDungeon(depth) : generateDungeon(depth);
+  G.player.x=G.dungeon.startX; G.player.y=G.dungeon.startY;
+  G.player.berserk=false; G.player.altarBuff=false;
+  initFog();
+  // Familiar persiste entre mazmorras; descansa en tienda
+  if (G.familiar) {
+    const fsp=findFamiliarSpawn();
+    G.familiar.x=fsp.x; G.familiar.y=fsp.y;
+    if (isShop) { G.familiar.hp=Math.min(G.familiar.maxHp,G.familiar.hp+1); addMsg('El familiar descansa (+1 VP)','#50e080'); }
+  }
+  // Mago: el espíritu Ɵ revive automáticamente al entrar en cada nivel
+  if (G.player.cls==='m' && !G.familiar) {
+    const famHp = 3 + Math.floor(G.depth/2);
+    const fsp = findFamiliarSpawn();
+    G.familiar = {x:fsp.x, y:fsp.y, hp:famHp, maxHp:famHp, atk:2, sym:'Ɵ', col:'#5090e0'};
+    G.familiarRespawnCooldown = 0;
+    addMsg('El espíritu se manifiesta','#5090e0');
+  }
+  if (isShop) {
+    G.enemies = [];
+    G.items   = [];
+    placeShopItems(depth);
+  } else {
+    placeEntities(depth);
+  }
+  // Aplicar efecto de luz activo
+  if (G.player.lightFog) {
+    for (let y=0;y<CFG.GH;y++) for (let x=0;x<CFG.GW;x++) if(G.fog[y][x]===0) G.fog[y][x]=1;
+  }
+  // Aplicar secretos activos
+  if (G.player.secretsMap>0) applySecretsMap();
+  updateActionBar(); render(); updateHUD(); updateInventoryBar();
+  addMsg(isShop ? '¡TIENDA! Compra lo que necesites' : `${G.dungeon.theme.name} · Piso ${depth}`, isShop ? '#40d0d0' : 'var(--dim)');
+}
+
+function nextDungeon() {
+  const p = G.player;
+  // Curar ligeramente entre niveles
+  p.hp=Math.min(p.maxHp, p.hp+2);
+  // Decrementar efectos de medallones (en niveles)
+  if (p.ghostImmune>0) { p.ghostImmune--; if(!p.ghostImmune) addMsg('Inmunidad terminada','#60c0f0'); }
+  if (p.invisible>0)   { p.invisible--;   if(!p.invisible)   addMsg('Invisibilidad terminada','#b0b0b0'); }
+  if (p.secretsMap>0)  { p.secretsMap--;  if(!p.secretsMap)  addMsg('Secretos terminados','#e080e0'); }
+  p.lightFog = false;  // La luz solo dura el nivel activo
+  // Mago: +1 maná al bajar de nivel (regeneración garantizada)
+  if (p.cls==='m') { p.mana=Math.min(p.maxMana, p.mana+1); addMsg('+1 Maná (nivel)','#5070e8'); }
+  loadDungeon(G.depth);
+}
+
+// ================================================================
+// MÓDULO 17: PANTALLAS
+// ================================================================
+
+const overlay=document.getElementById('overlay');
+const overlayContent=document.getElementById('overlay-content');
+function showOverlay(html){overlayContent.innerHTML=html; overlay.classList.add('active');}
+function hideOverlay(){overlay.classList.remove('active');}
+
+function showTitle() {
+  const continueBtn = hasSavedGame()
+    ? `<button class="btn-main" onclick="resumeGame()" style="margin-bottom:12px">CONTINUAR</button>`
+    : '';
+  showOverlay(`
+    <div class="screen-box">
+      <div class="screen-title">DUNGEON</div>
+      <div class="screen-sub">D E P T H S</div>
+      <div style="font-size:15px;color:var(--text);letter-spacing:3px;margin-bottom:40px;opacity:.7">
+        EXPLORA · SOBREVIVE · ESCAPA
+      </div>
+      ${continueBtn}
+      <button class="btn-main" onclick="showClassSelect()">${hasSavedGame()?'NUEVA PARTIDA':'COMENZAR'}</button>
+    </div>
+  `);
+}
+
+function showClassSelect() {
+  const cards=CFG.CLASSES.map(c=>`
+    <div class="class-card" style="border-color:${c.col}28"
+         onclick="startGame('${c.id}')"
+         onmouseover="this.style.borderColor='${c.col}'"
+         onmouseout="this.style.borderColor='${c.col}28'">
+      <div class="cls-icon" style="color:${c.col}">${c.icon}</div>
+      <div class="cls-name" style="color:${c.col}">${c.name}</div>
+      <div class="cls-desc">${c.desc}</div>
+      <div class="cls-stats">VP:${c.hp} · ATK:${c.atk} · DEF:${c.def} · MP:${c.mana}</div>
+    </div>
+  `).join('');
+  showOverlay(`
+    <div class="screen-box">
+      <div style="font-size:14px;letter-spacing:4px;color:var(--text);margin-bottom:22px;opacity:.8">ELIGE TU CLASE</div>
+      <div class="class-cards">${cards}</div>
+    </div>
+  `);
+}
+
+function startGame(clsId) {
+  hideOverlay();
+  inputLocked = false;   // resetear siempre al iniciar partida nueva
+  clearSavedGame();      // una partida nueva invalida cualquier guardado anterior
+  initState(clsId); loadDungeon(1); startLoop();
+}
+
+function showDeathScreen() {
+  G.screen='dead'; inputLocked=true;
+  sfx('defeat');
+  showOverlay(`
+    <div class="screen-box">
+      <div style="font-size:20px;color:var(--red);letter-spacing:4px;margin-bottom:10px">HAS CAÍDO</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:6px">La mazmorra se regenera con la mitad de VP</div>
+      <div style="font-size:13px;color:var(--red);margin-bottom:22px">${G.lives} ❤ restante${G.lives!==1?'s':''}</div>
+      <button class="btn-main" onclick="respawnPlayer()">CONTINUAR</button>
+    </div>
+  `);
+}
+
+function respawnPlayer() {
+  hideOverlay();
+  inputLocked = false;
+  G.player.hp = Math.max(1, Math.floor(G.player.maxHp / 2));
+  // Regenerar la mazmorra al mismo piso — el jugador conserva inventario y oro
+  loadDungeon(G.depth);
+  addMsg('Reapareces en una nueva mazmorra...','#c07030');
+}
+
+function showGameOver() {
+  G.screen='gameover'; inputLocked=true;
+  sfx('gameover');
+  clearSavedGame();
+  const rec = saveRecords();
+  const isNewFloor = G.depth   >= rec.floor;
+  const isNewGold  = G.totalGold >= rec.gold;
+  const isNewKills = G.totalKills >= rec.kills;
+  showOverlay(`
+    <div class="screen-box">
+      <div class="screen-title" style="font-size:22px;color:var(--red)">GAME OVER</div>
+      <div style="margin:14px 0 8px">
+        <div class="stat-line">Clase: <span class="stat-val">${G.player.name}</span></div>
+        <div class="stat-line">Piso alcanzado: <span class="stat-val">${G.depth}</span>${isNewFloor?' <span style="color:var(--gold)">★ récord</span>':''}</div>
+        <div class="stat-line" style="color:var(--gold)">Oro: <span class="stat-val">${G.totalGold}</span>${isNewGold?' <span style="color:var(--gold)">★ récord</span>':''}</div>
+        <div class="stat-line">Enemigos: <span class="stat-val">${G.totalKills}</span>${isNewKills?' <span style="color:var(--gold)">★ récord</span>':''}</div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px;font-size:11px;color:var(--dim)">
+        RÉCORDS: Piso ${rec.floor||0} · Oro ${rec.gold||0} · Enemigos ${rec.kills||0}
+      </div>
+      <div style="margin-top:18px">
+        <button class="btn-main" onclick="showClassSelect()">NUEVA PARTIDA</button>
+      </div>
+    </div>
+  `);
+}
+
+function togglePause() {
+  if (!G.dungeon||G.screen==='gameover') return;
+  G.paused=!G.paused;
+  document.getElementById('btn-pause').textContent=G.paused?'▶':'⏸';
+  document.getElementById('btn-pause').classList.toggle('active-btn',G.paused);
+  if (G.paused) {
+    clearInterval(enemyInterval);
+    showOverlay(`<div class="screen-box"><div style="font-size:18px;letter-spacing:5px;color:var(--gold);margin-bottom:24px">PAUSA</div><button class="btn-main" onclick="togglePause()">CONTINUAR</button></div>`);
+  } else {
+    enemyInterval=setInterval(enemyTick,CFG.ENEMY_MS);
+    hideOverlay();
+  }
+}
+
+function showInfo() {
+  const wasPlaying=G.dungeon&&!G.paused&&G.screen==='playing';
+  if (wasPlaying){G.paused=true;clearInterval(enemyInterval);}
+  window._infoPaused=wasPlaying;
+  showOverlay(`
+    <div class="info-box">
+      <div class="info-title">ICONOS DEL JUEGO</div>
+      <div class="info-section">JUGADOR</div>
+      <div class="info-grid">
+        <div class="info-row"><span class="info-sym" style="color:#d06050">@</span><span class="info-label">Guerrero <span class="info-sub">VP:10 DEF:2 · frenesí</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#50c070">}</span><span class="info-label">Arquero <span class="info-sub">rango · sin réplica</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#5080d0">&amp;</span><span class="info-label">Mago <span class="info-sub">VP:7 · hechizo ilimitado · espíritu Ɵ</span></span></div>
+      </div>
+      <div class="info-section">ENEMIGOS</div>
+      <div class="info-grid">
+        <div class="info-row"><span class="info-sym" style="color:#a05828">r</span><span class="info-label">Rata <span class="info-sub">débil</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#8060a0">⋎</span><span class="info-label">Murciélago <span class="info-sub">débil · detección alta</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#b0a060">╬</span><span class="info-label">Esqueleto <span class="info-sub">medio</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#6090b8">ƍ</span><span class="info-label">Fantasma <span class="info-sub">medio · visión amplia</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#a030c0">Ψ</span><span class="info-label">Bruja <span class="info-sub">fuerte</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#e02020">Ω</span><span class="info-label">Mini-Jefe <span class="info-sub">muy fuerte</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#7020a0">☠</span><span class="info-label">Nigromante <span class="info-sub">élite · piso 12+</span></span></div>
+      </div>
+      <div class="info-section">OBJETOS</div>
+      <div class="info-grid">
+        <div class="info-row"><span class="info-sym" style="color:#e8b828">◆</span><span class="info-label">Oro</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#d83050">♥</span><span class="info-label">Poción (+3 VP)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#e07828">ı</span><span class="info-label">Antorcha (amplía visión)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#5070e8">✦</span><span class="info-label">Poción de maná</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#70b838">%</span><span class="info-label">Comida (+1 VP)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#b07828">⊞</span><span class="info-label">Cofre (oro + bonus)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#d83838">⚷</span><span class="info-label">Llave roja</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#3850d8">⚷</span><span class="info-label">Llave azul</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#38b850">⚷</span><span class="info-label">Llave verde</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#8850d0">Δ</span><span class="info-label">Altar (maná/VP)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#c0c070">↑</span><span class="info-label">Flechas (arquero)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#708090">⚱</span><span class="info-label">Urna <span class="info-sub">destino incierto</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#f0e060">◉</span><span class="info-label">Medallón de Luz <span class="info-sub">1 nivel</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#60c0f0">⊙</span><span class="info-label">Medallón de Inmunidad <span class="info-sub">1 nivel</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#b0b0b0">◌</span><span class="info-label">Medallón de Invis. <span class="info-sub">3 niveles</span></span></div>
+        <div class="info-row"><span class="info-sym" style="color:#e080e0">✵</span><span class="info-label">Medallón de Secretos <span class="info-sub">5 niveles</span></span></div>
+      </div>
+      <div class="info-section">TILES</div>
+      <div class="info-grid">
+        <div class="info-row"><span class="info-sym" style="color:#c0a030">▼</span><span class="info-label">Salida (siguiente piso)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#c05010">✕</span><span class="info-label">Trampa visible (daña)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:#c02828">▣</span><span class="info-label">Puerta (necesita llave)</span></div>
+        <div class="info-row"><span class="info-sym" style="color:var(--dim)">·</span><span class="info-label">Salida oculta (igual que suelo)</span></div>
+      </div>
+      <div class="info-section">CONTROLES</div>
+      <div class="info-ctrl"><span>WASD / ↑↓←→</span> — mover un tile</div>
+      <div class="info-ctrl"><span>Espacio</span> — disparar</div>
+      <div class="info-ctrl"><span>H</span> — usar poción · <span>F</span> — comer · <span>M</span> — poción maná</div>
+      <div class="info-ctrl"><span>1-8</span> — activar slot de inventario</div>
+      <div class="info-ctrl"><span>Esc / ⏸</span> — pausa</div>
+      <div class="info-ctrl"><span>Toca canvas</span> — mover (móvil)</div>
+      <div class="info-ctrl"><span>Toca contador</span> — usar consumible (móvil)</div>
+      <div style="text-align:center;margin-top:20px">
+        <button class="btn-main" onclick="closeInfo()">CERRAR</button>
+      </div>
+    </div>
+  `);
+}
+
+function closeInfo() {
+  hideOverlay();
+  if (window._infoPaused) {
+    G.paused=false;
+    document.getElementById('btn-pause').textContent='⏸';
+    document.getElementById('btn-pause').classList.remove('active-btn');
+    enemyInterval=setInterval(enemyTick,CFG.ENEMY_MS);
+  }
+}
+
+// ================================================================
+// MÓDULO 18: MENSAJES
+// ================================================================
+
+function addMsg(text, col='var(--text)') {
+  G.messages.unshift({text, col, time:Date.now()});
+  if (G.messages.length>6) G.messages.length=6;
+  updateHUD();
+}
+
+// ================================================================
+// MÓDULO: LEVEL UP — elección entre mazmorras
+// ================================================================
+
+function buildChoicePool() {
+  const p = G.player;
+  const pool = [
+    { icon:'⚔', label:'+1 Ataque',        apply:()=>p.atk++ },
+    { icon:'♥', label:'+2 VP máximos',    apply:()=>{ p.maxHp=Math.min(CFG.MAX_HP+4,p.maxHp+2); p.hp=Math.min(p.maxHp,p.hp+2); }},
+    { icon:'†', label:'+1 Antorcha',      apply:()=>p.torches++ },
+    { icon:'⊕', label:'+1 Defensa',       apply:()=>p.def++ },
+    { icon:'◉', label:'Curación completa',apply:()=>p.hp=p.maxHp },
+    { icon:'◆', label:'+25 Oro',          apply:()=>{ p.gold+=25; G.totalGold+=25; }},
+  ];
+  if (p.cls==='a') pool.push({ icon:'↑', label:'+8 Flechas',   apply:()=>p.arrows=Math.min(20,p.arrows+8) });
+  if (p.cls==='m') pool.push({ icon:'✦', label:'+3 Maná máx.', apply:()=>{ p.maxMana+=3; p.mana=Math.min(p.maxMana,p.mana+3); }});
+  if (p.cls==='w') pool.push({ icon:'⚔', label:'+2 Defensa',   apply:()=>p.def+=2 });
+  return pool;
+}
+
+function showPendingLevelUps(onDone) {
+  if (G.pendingLevelUps <= 0) {
+    G.screen = 'playing'; // restaurar antes de cargar siguiente mazmorra
+    onDone();
+    return;
+  }
+  G.screen = 'levelup';  // detiene enemyTick mientras el jugador elige
+  G.pendingLevelUps--;
+  G.playerLevel++;
+
+  const pool = buildChoicePool();
+  shuffle(pool);
+  const choices = pool.slice(0, 3);
+  window._lvlChoices = choices;
+  window._lvlDone = onDone;
+
+  const cards = choices.map((c, i) => `
+    <div class="lvl-card" onclick="applyLevelChoice(${i})">
+      <div class="lvl-icon">${c.icon}</div>
+      <div class="lvl-label">${c.label}</div>
+    </div>`).join('');
+
+  showOverlay(`
+    <div class="screen-box">
+      <div style="font-size:12px;letter-spacing:3px;color:var(--dim);margin-bottom:4px">NIVEL ${G.playerLevel}</div>
+      <div style="font-size:24px;color:var(--gold);letter-spacing:6px;margin-bottom:20px">MEJORA</div>
+      <div class="lvl-cards">${cards}</div>
+      <div style="font-size:10px;color:var(--dim);margin-top:8px">Elige una mejora permanente</div>
+    </div>
+  `);
+}
+
+function applyLevelChoice(i) {
+  const choice = window._lvlChoices[i];
+  choice.apply();
+  sfx('levelup');
+  addMsg(`Nivel ${G.playerLevel}: ${choice.label}`,'#f0d040');
+  hideOverlay();
+  showPendingLevelUps(window._lvlDone);
+}
+
+// ================================================================
+// MÓDULO: FAMILIAR — aliado que persiste entre mazmorras
+// ================================================================
+
+// Mapa de distancias BFS acotado desde (sx,sy), respetando muros/puertas.
+// Devuelve Map: "x,y" -> {dist, dir:{dx,dy}} (dir = primer paso desde el origen)
+function bfsFamiliarMap(sx, sy, maxDist) {
+  const T = CFG.T;
+  const blocked = (x,y) => {
+    if (!inBounds(x,y)) return true;
+    const t = G.dungeon.grid[y][x];
+    return t===T.WALL||t===T.DOOR_R||t===T.DOOR_B||t===T.DOOR_G||t===T.DOOR_GOLD;
+  };
+  const map = new Map();
+  map.set(sx+','+sy, {dist:0, dir:null});
+  let frontier = [{x:sx,y:sy}];
+  for (let d=1; d<=maxDist && frontier.length; d++) {
+    const next=[];
+    for (const node of frontier) {
+      const info = map.get(node.x+','+node.y);
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx=node.x+dx, ny=node.y+dy, key=nx+','+ny;
+        if (map.has(key) || blocked(nx,ny)) continue;
+        map.set(key, {dist:d, dir: info.dir || {dx,dy}});
+        next.push({x:nx,y:ny});
+      }
+    }
+    frontier = next;
+  }
+  return map;
+}
+
+const FAMILIAR_RANGE = 7;       // antes 5: rango de detección de enemigos
+const FAMILIAR_FOLLOW_DIST = 2; // antes 3: a partir de cuántas casillas empieza a seguir al jugador
+const FAMILIAR_RESPAWN_TURNS = 8; // ~5-6s a 700ms/turno
+
+function familiarTick() {
+  if (!G.dungeon) return;
+
+  // Resurrección del espíritu del mago si murió a mitad de piso (sin esperar al siguiente nivel)
+  if (!G.familiar && G.player.cls==='m' && G.familiarRespawnCooldown > 0) {
+    G.familiarRespawnCooldown--;
+    if (G.familiarRespawnCooldown <= 0) {
+      const famHp = 3 + Math.floor(G.depth/2);
+      const fsp = findFamiliarSpawn();
+      G.familiar = {x:fsp.x, y:fsp.y, hp:famHp, maxHp:famHp, atk:2, sym:'Ɵ', col:'#5090e0'};
+      addMsg('El espíritu regresa','#5090e0');
+    }
+  }
+  if (!G.familiar) return;
+
+  const f = G.familiar;
+  const NAV_RADIUS = 10; // radio de navegación (rango de detección + margen para seguir al jugador)
+  const pathMap = bfsFamiliarMap(f.x, f.y, NAV_RADIUS);
+
+  // Enemigo alcanzable más cercano en rango, por camino real (no línea recta)
+  let target = null, targetInfo = null;
+  for (const e of G.enemies) {
+    const info = pathMap.get(e.x+','+e.y);
+    if (!info || info.dist > FAMILIAR_RANGE) continue;
+    if (!targetInfo || info.dist < targetInfo.dist) { target=e; targetInfo=info; }
+  }
+
+  if (target && targetInfo.dist === 1) {
+    // Adyacente: atacar
+    const dmg = f.atk;
+    target.hp -= dmg;
+    addMsg(`ω -${dmg} ${target.name}`,'#50e080');
+    if (target.hp <= 0) {
+      // Golpe letal: el enemigo no llega a replicar
+      gainXP(Math.floor(target.xp/2));
+      addMsg(`${target.name} (aliado) +${Math.floor(target.xp/2)}XP`,'#50e080');
+      // Drop del enemigo
+      if (Math.random()<0.1) G.items.push({type:'gold',x:target.x,y:target.y,amount:2+ri(4)});
+      const ti = G.enemies.indexOf(target);
+      if (ti!==-1) G.enemies.splice(ti,1);
+      return;
+    }
+    // Réplica del enemigo al familiar (solo si sigue vivo)
+    const edm = Math.max(0, target.atk - 1);
+    if (edm > 0) {
+      f.hp -= edm;
+      if (f.hp <= 0) {
+        addMsg('El familiar ha caído...','#50e080');
+        sfx('death'); G.familiar = null;
+        if (G.player.cls==='m') G.familiarRespawnCooldown = FAMILIAR_RESPAWN_TURNS;
+        return;
+      }
+    }
+    return;
+  }
+
+  if (target) {
+    // Moverse el primer paso del camino real hacia el enemigo alcanzable más cercano
+    // (dir es null si el objetivo está en la misma casilla: caso degenerado, no hacer nada)
+    if (targetInfo.dir) {
+      const nx=f.x+targetInfo.dir.dx, ny=f.y+targetInfo.dir.dy;
+      if (!G.enemies.some(e=>e.x===nx&&e.y===ny) && !(nx===G.player.x&&ny===G.player.y)) {
+        f.x=nx; f.y=ny;
+      }
+    }
+    return;
+  }
+
+  // Sin enemigos alcanzables: seguir al jugador si está lejos
+  const p=G.player;
+  const dist=Math.abs(p.x-f.x)+Math.abs(p.y-f.y);
+  if (dist>FAMILIAR_FOLLOW_DIST) {
+    const info = pathMap.get(p.x+','+p.y);
+    if (info && info.dir) {
+      const nx=f.x+info.dir.dx, ny=f.y+info.dir.dy;
+      if (!G.enemies.some(e=>e.x===nx&&e.y===ny) && !(nx===p.x&&ny===p.y)) { f.x=nx; f.y=ny; }
+    } else {
+      // Jugador fuera del radio de navegación: comportamiento simple de respaldo
+      const dx=Math.sign(p.x-f.x), dy=Math.sign(p.y-f.y);
+      for (const [mdx,mdy] of [[dx,0],[0,dy]]) {
+        const nx=f.x+mdx, ny=f.y+mdy;
+        if (!inBounds(nx,ny)) continue;
+        if (G.dungeon.grid[ny][nx]===CFG.T.FLOOR && !G.enemies.some(e=>e.x===nx&&e.y===ny) && !(nx===p.x&&ny===p.y)) { f.x=nx; f.y=ny; break; }
+      }
+    }
+  }
+}
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem('dd_records')) || {}; } catch { return {}; }
+}
+function saveRecords() {
+  const r = loadRecords();
+  if (G.depth   > (r.floor ||0)) r.floor  = G.depth;
+  if (G.totalGold > (r.gold  ||0)) r.gold   = G.totalGold;
+  if (G.totalKills> (r.kills ||0)) r.kills  = G.totalKills;
+  try { localStorage.setItem('dd_records', JSON.stringify(r)); } catch {}
+  return r;
+}
+
+// ================================================================
+// MÓDULO 19: GUARDADO DE PARTIDA (autoguardado / continuar)
+// ================================================================
+const SAVE_KEY = 'dd_save';
+
+function saveGameState() {
+  if (!G.dungeon || G.screen!=='playing') return;
+  const snapshot = {
+    depth:G.depth, lives:G.lives,
+    xp:G.xp, xpNext:G.xpNext, playerLevel:G.playerLevel, pendingLevelUps:G.pendingLevelUps,
+    totalGold:G.totalGold, totalKills:G.totalKills,
+    player:G.player, dungeon:G.dungeon, fog:G.fog,
+    enemies:G.enemies, items:G.items, spawning:G.spawning,
+    familiar:G.familiar, familiarRespawnCooldown:G.familiarRespawnCooldown,
+    camX:G.camX, camY:G.camY,
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot)); } catch {}
+}
+
+function hasSavedGame() {
+  try { return !!localStorage.getItem(SAVE_KEY); } catch { return false; }
+}
+
+function loadGameState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearSavedGame() {
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+}
+
+function resumeGame() {
+  const saved = loadGameState();
+  if (!saved) { showTitle(); return; }
+  hideOverlay();
+  G = Object.assign({ messages:[], projectile:null, lastDmgFlash:0, paused:false }, saved);
+  G.screen = 'playing';
+  inputLocked = false;
+  updateActionBar(); updateInventoryBar(); updateHUD(); render();
+  startLoop();
+  addMsg('Partida continuada','#50e080');
+}
+
+let enemyInterval=null, rafId=null;
+
+function startLoop() {
+  if (enemyInterval) clearInterval(enemyInterval);
+  enemyInterval=setInterval(enemyTick,CFG.ENEMY_MS);
+  function loop(){ if(G.dungeon&&G.screen==='playing') render(); rafId=requestAnimationFrame(loop); }
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId=requestAnimationFrame(loop);
+}
+
+// ================================================================
+// MÓDULO 20: INPUT
+// ================================================================
+
+function setupInput() {
+  // Teclado
+  document.addEventListener('keydown', e => {
+    const k=e.key;
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','s','a','d','W','S','A','D',' '].includes(k)) e.preventDefault();
+    if      (k==='ArrowUp'   ||k==='w'||k==='W') tryMove(0,-1);
+    else if (k==='ArrowDown' ||k==='s'||k==='S') tryMove(0,1);
+    else if (k==='ArrowLeft' ||k==='a'||k==='A') tryMove(-1,0);
+    else if (k==='ArrowRight'||k==='d'||k==='D') tryMove(1,0);
+    else if (k===' ') shootProjectile();
+    else if (k==='h'||k==='H') useConsumable('potion');
+    else if (k==='f'||k==='F') useConsumable('food');
+    else if (k==='m'||k==='M') useConsumable('mana_pot');
+    else if (k>='1'&&k<='8') useSlot(parseInt(k)-1);
+    else if (k==='Escape'&&G.dungeon) togglePause();
+  });
+
+  // Click en canvas
+  canvas.addEventListener('click', e => {
+    const r=canvas.getBoundingClientRect();
+    moveToward(G.camX+(e.clientX-r.left)/TS, G.camY+(e.clientY-r.top)/TS);
+  });
+
+  // Touch: mantener = avanzar continuamente
+  let tTarget=null, tInterval=null;
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const r=canvas.getBoundingClientRect(), t=e.touches[0];
+    tTarget={x:G.camX+(t.clientX-r.left)/TS, y:G.camY+(t.clientY-r.top)/TS};
+    moveToward(tTarget.x,tTarget.y);
+    tInterval=setInterval(()=>{ if(tTarget) moveToward(tTarget.x,tTarget.y); },180);
+  },{passive:false});
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const r=canvas.getBoundingClientRect(), t=e.touches[0];
+    tTarget={x:G.camX+(t.clientX-r.left)/TS, y:G.camY+(t.clientY-r.top)/TS};
+  },{passive:false});
+  canvas.addEventListener('touchend', e => {
+    e.preventDefault(); clearInterval(tInterval); tTarget=null;
+  },{passive:false});
+
+  // Toolbar
+  document.getElementById('btn-theme').addEventListener('click',  toggleTheme);
+  document.getElementById('btn-audio').addEventListener('click',  toggleAudio);
+  document.getElementById('btn-pause').addEventListener('click',  togglePause);
+  document.getElementById('btn-restart').addEventListener('click',()=>showClassSelect());
+  document.getElementById('btn-info').addEventListener('click',   showInfo);
+
+  // ── D-pad táctil: hold-to-repeat ──
+  function bindDir(id, dx, dy) {
+    const btn=document.getElementById(id); if(!btn) return;
+    let hold=null;
+    const act=()=>tryMove(dx,dy);
+    btn.addEventListener('touchstart',e=>{e.preventDefault();act();hold=setInterval(act,150);},{passive:false});
+    btn.addEventListener('touchend',  e=>{e.preventDefault();clearInterval(hold);},{passive:false});
+    btn.addEventListener('touchcancel',e=>{clearInterval(hold);},{passive:false});
+    btn.addEventListener('mousedown',()=>{act();hold=setInterval(act,150);});
+    btn.addEventListener('mouseup',()=>clearInterval(hold));
+    btn.addEventListener('mouseleave',()=>clearInterval(hold));
+  }
+  bindDir('btn-up',    0,-1);
+  bindDir('btn-down',  0, 1);
+  bindDir('btn-left', -1, 0);
+  bindDir('btn-right',  1, 0);
+
+  // ── Disparo ──
+  const bs=document.getElementById('btn-shoot');
+  bs.addEventListener('click',shootProjectile);
+  bs.addEventListener('touchstart',e=>{e.preventDefault();shootProjectile();},{passive:false});
+
+  // ── Inversión de controles (zurdos) ──
+  document.getElementById('btn-hand').addEventListener('click', toggleHandedness);
+  document.getElementById('btn-dpad').addEventListener('click', toggleDpad);
+}
+
+// ================================================================
+// UTILIDADES
+// ================================================================
+
+function inBounds(x,y){ return x>=0&&y>=0&&x<CFG.GW&&y<CFG.GH; }
+function ri(n)        { return Math.floor(Math.random()*n); }
+function shuffle(a)   { for(let i=a.length-1;i>0;i--){const j=ri(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function brighten(hex,f){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return `rgb(${Math.min(255,(r*f)|0)},${Math.min(255,(g*f)|0)},${Math.min(255,(b*f)|0)})`;
+}
+
+// ================================================================
+// ARRANQUE
+// ================================================================
+
+function toggleHandedness() {
+  const row=document.getElementById('control-row');
+  row.classList.toggle('invert');
+  const inv=row.classList.contains('invert');
+  document.getElementById('btn-hand').classList.toggle('active-btn', inv);
+  document.getElementById('btn-hand').title = inv ? 'Invertir controles (diestros)' : 'Invertir controles (zurdos)';
+  try { localStorage.setItem('dd_lefty', inv?'1':'0'); } catch{}
+}
+
+function initControls() {
+  const row = document.getElementById('control-row');
+  // Detección multicapa: pointer coarse (CSS ya lo cubre), JS como refuerzo
+  const isTouch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+                || ('ontouchstart' in window)
+                || (navigator.maxTouchPoints > 0)
+                || /Android|iPhone|iPad|iPod|Tablet|Touch/i.test(navigator.userAgent);
+
+  // Aplicar preferencia guardada (override manual)
+  try {
+    const saved = localStorage.getItem('dd_dpad');
+    if (saved === 'on')  { row.classList.add('touch-on');  row.classList.remove('touch-off'); }
+    if (saved === 'off') { row.classList.add('touch-off'); row.classList.remove('touch-on'); }
+  } catch{}
+
+  // Si es táctil y no hay override guardado, forzar visible
+  if (isTouch) row.classList.add('touch-on');
+
+  // Restaurar preferencia de mano
+  try { if (localStorage.getItem('dd_lefty')==='1') toggleHandedness(); } catch{}
+
+  // Actualizar icono del botón de dpad toggle
+  updateDpadBtn();
+}
+
+function toggleDpad() {
+  const row = document.getElementById('control-row');
+  const visible = row.classList.contains('touch-on') || 
+    (!row.classList.contains('touch-off') && getComputedStyle(row).display !== 'none');
+  if (visible) {
+    row.classList.remove('touch-on');
+    row.classList.add('touch-off');
+    try { localStorage.setItem('dd_dpad','off'); } catch{}
+  } else {
+    row.classList.remove('touch-off');
+    row.classList.add('touch-on');
+    try { localStorage.setItem('dd_dpad','on'); } catch{}
+  }
+  updateDpadBtn();
+}
+
+function updateDpadBtn() {
+  const row = document.getElementById('control-row');
+  const btn = document.getElementById('btn-dpad');
+  if (!btn) return;
+  const visible = !row.classList.contains('touch-off') &&
+    (row.classList.contains('touch-on') || getComputedStyle(row).display !== 'none');
+  btn.classList.toggle('active-btn', visible);
+  btn.title = visible ? 'Ocultar cruceta' : 'Mostrar cruceta';
+}
+
+function init() {
+  computeLayout();
+  window.addEventListener('resize',()=>{ computeLayout(); if(G.dungeon) render(); });
+  window.addEventListener('beforeunload', saveGameState);
+  setupInput();
+  applyTheme('dark'); // tema inicial
+  showTitle();
+}
+init();
+</script>
+</body>
+</html>
